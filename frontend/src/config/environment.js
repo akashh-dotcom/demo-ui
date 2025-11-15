@@ -1,7 +1,8 @@
-// Environment configuration
+// Environment configuration - Static app (no backend)
 const environment = {
   production: import.meta.env.PROD,
-  apiUrl: import.meta.env.VITE_API_URL || 'http://localhost:8000/xmlconverter',
+  apiUrl: '', // No backend connection
+  isStatic: true, // Static app flag
 };
 
 export default environment;

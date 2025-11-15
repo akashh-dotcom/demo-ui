@@ -1,56 +1,78 @@
 import { createContext, useState, useEffect, useContext } from 'react';
-import api from '../utils/api';
 
 const AuthContext = createContext(null);
+
+// Mock user data for static app
+const MOCK_USERS = {
+  'demo@example.com': {
+    id: '1',
+    email: 'demo@example.com',
+    first_name: 'Demo',
+    last_name: 'User',
+    is_active: true,
+    is_verified: true,
+    role: 'user',
+    created_at: '2024-01-01T00:00:00Z',
+    last_login: new Date().toISOString(),
+    login_count: 42,
+    manuscript_count: 5,
+  },
+  'admin@example.com': {
+    id: '2',
+    email: 'admin@example.com',
+    first_name: 'Admin',
+    last_name: 'User',
+    is_active: true,
+    is_verified: true,
+    role: 'admin',
+    created_at: '2024-01-01T00:00:00Z',
+    last_login: new Date().toISOString(),
+    login_count: 150,
+    manuscript_count: 20,
+  },
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if user is already logged in
-    const token = localStorage.getItem('manuscript_token');
+    // Check if user is already logged in (static mode)
     const savedUser = localStorage.getItem('manuscript_user');
 
-    if (token && savedUser) {
+    if (savedUser) {
       try {
         const userData = JSON.parse(savedUser);
         setUser(userData);
-        // Validate token and fetch latest user info
-        getCurrentUserInfo().catch(() => {
-          // If validation fails, clear everything
-          logout();
-        });
       } catch (error) {
-        logout();
+        console.error('Failed to parse saved user:', error);
       }
     }
     setLoading(false);
   }, []);
 
-  const isTokenExpired = (token) => {
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const expirationTime = payload.exp * 1000;
-      return Date.now() >= expirationTime;
-    } catch (error) {
-      return true;
-    }
-  };
-
   const login = async (credentials) => {
-    try {
-      const response = await api.post('/auth/login', credentials);
-      const { access_token } = response.data;
+    // Static login - check against mock users
+    const mockUser = MOCK_USERS[credentials.email];
 
-      localStorage.setItem('manuscript_token', access_token);
+    if (mockUser) {
+      const userData = {
+        ...mockUser,
+        last_login: new Date().toISOString(),
+      };
 
-      // Create basic user object
-      const basicUser = {
-        id: '',
+      setUser(userData);
+      localStorage.setItem('manuscript_user', JSON.stringify(userData));
+      localStorage.setItem('manuscript_token', 'static-token-' + Date.now());
+
+      return userData;
+    } else {
+      // Auto-create user for any email
+      const newUser = {
+        id: Date.now().toString(),
         email: credentials.email,
-        first_name: '',
-        last_name: '',
+        first_name: credentials.email.split('@')[0],
+        last_name: 'User',
         is_active: true,
         is_verified: true,
         role: 'user',
@@ -60,136 +82,78 @@ export const AuthProvider = ({ children }) => {
         manuscript_count: 0,
       };
 
-      setUser(basicUser);
-      localStorage.setItem('manuscript_user', JSON.stringify(basicUser));
+      setUser(newUser);
+      localStorage.setItem('manuscript_user', JSON.stringify(newUser));
+      localStorage.setItem('manuscript_token', 'static-token-' + Date.now());
 
-      // Fetch actual user info
-      try {
-        await getCurrentUserInfo();
-      } catch (error) {
-        console.warn('Could not fetch user info after login:', error);
-      }
-
-      return basicUser;
-    } catch (error) {
-      throw error;
+      return newUser;
     }
   };
 
   const register = async (credentials) => {
-    try {
-      const response = await api.post('/auth/register', credentials);
-      const userData = response.data.data;
+    // Static registration - auto-create user
+    const newUser = {
+      id: Date.now().toString(),
+      email: credentials.email,
+      first_name: credentials.first_name || '',
+      last_name: credentials.last_name || '',
+      is_active: true,
+      is_verified: true,
+      role: 'user',
+      created_at: new Date().toISOString(),
+      last_login: new Date().toISOString(),
+      login_count: 1,
+      manuscript_count: 0,
+    };
 
-      const user = {
-        id: userData.id || '',
-        email: userData.email || credentials.email,
-        first_name: userData.first_name || '',
-        last_name: userData.last_name || '',
-        is_active: userData.is_active || true,
-        is_verified: userData.is_verified || false,
-        role: userData.role || 'user',
-        created_at: userData.created_at || new Date().toISOString(),
-        last_login: userData.last_login || '',
-        login_count: userData.login_count || 0,
-        manuscript_count: userData.manuscript_count || 0,
-      };
+    setUser(newUser);
+    localStorage.setItem('manuscript_user', JSON.stringify(newUser));
+    localStorage.setItem('manuscript_token', 'static-token-' + Date.now());
 
-      return user;
-    } catch (error) {
-      throw error;
-    }
+    return newUser;
   };
 
   const logout = async () => {
-    try {
-      await api.post('/auth/logout', {});
-    } catch (error) {
-      console.warn('Logout request failed:', error);
-    } finally {
-      localStorage.removeItem('manuscript_token');
-      localStorage.removeItem('manuscript_refresh_token');
-      localStorage.removeItem('manuscript_user');
-      setUser(null);
-    }
+    localStorage.removeItem('manuscript_token');
+    localStorage.removeItem('manuscript_refresh_token');
+    localStorage.removeItem('manuscript_user');
+    setUser(null);
   };
 
   const getCurrentUserInfo = async () => {
-    try {
-      const response = await api.get('/auth/me');
-      const userData = response.data.data;
-      setUser(userData);
-      localStorage.setItem('manuscript_user', JSON.stringify(userData));
-      return userData;
-    } catch (error) {
-      throw error;
-    }
+    return user;
   };
 
   const getCurrentUserProfile = async () => {
-    try {
-      const response = await api.get('/users/profile');
-      const userData = response.data.data;
-      setUser(userData);
-      localStorage.setItem('manuscript_user', JSON.stringify(userData));
-      return userData;
-    } catch (error) {
-      throw error;
-    }
+    return user;
   };
 
   const updateProfile = async (profileData) => {
-    try {
-      const response = await api.put('/users/profile', profileData);
-      const userData = response.data.data;
-      setUser(userData);
-      localStorage.setItem('manuscript_user', JSON.stringify(userData));
-      return userData;
-    } catch (error) {
-      throw error;
-    }
+    const updatedUser = {
+      ...user,
+      ...profileData,
+    };
+    setUser(updatedUser);
+    localStorage.setItem('manuscript_user', JSON.stringify(updatedUser));
+    return updatedUser;
   };
 
   const changePassword = async (passwordData) => {
-    try {
-      const response = await api.post('/users/change-password', passwordData);
-      return response.data.data;
-    } catch (error) {
-      throw error;
-    }
+    // Static mode - just simulate success
+    return { message: 'Password changed successfully' };
   };
 
   const requestPasswordReset = async (email) => {
-    try {
-      const response = await api.post('/users/request-password-reset', { email });
-      return response.data.data;
-    } catch (error) {
-      throw error;
-    }
+    // Static mode - just simulate success
+    return { message: 'Password reset email sent' };
   };
 
   const validateToken = async () => {
-    try {
-      const response = await api.get('/auth/validate');
-      const userData = response.data.data;
-      setUser(userData);
-      localStorage.setItem('manuscript_user', JSON.stringify(userData));
-      return userData;
-    } catch (error) {
-      throw error;
-    }
+    return user;
   };
 
   const isAuthenticated = () => {
-    const token = localStorage.getItem('manuscript_token');
-    if (!token) return false;
-
-    if (isTokenExpired(token)) {
-      logout();
-      return false;
-    }
-
-    return true;
+    return !!user;
   };
 
   const hasRole = (role) => {

@@ -1,40 +1,25 @@
-import axios from 'axios';
-import environment from '../config/environment';
+// Static mock API - No backend connection
+// All API calls are simulated with mock data
 
-const api = axios.create({
-  baseURL: `${environment.apiUrl}/api/v1`,
-  headers: {
-    'Content-Type': 'application/json',
+const mockDelay = () => new Promise(resolve => setTimeout(resolve, 300));
+
+const api = {
+  get: async (url) => {
+    await mockDelay();
+    return { data: { data: null } };
   },
-});
-
-// Request interceptor to add auth token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('manuscript_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
+  post: async (url, data) => {
+    await mockDelay();
+    return { data: { data: null } };
   },
-  (error) => {
-    return Promise.reject(error);
-  }
-);
-
-// Response interceptor to handle 401 errors
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      // Clear storage and redirect to login
-      localStorage.removeItem('manuscript_token');
-      localStorage.removeItem('manuscript_refresh_token');
-      localStorage.removeItem('manuscript_user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
-  }
-);
+  put: async (url, data) => {
+    await mockDelay();
+    return { data: { data: null } };
+  },
+  delete: async (url) => {
+    await mockDelay();
+    return { data: { data: null } };
+  },
+};
 
 export default api;
