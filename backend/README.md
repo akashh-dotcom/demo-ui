@@ -228,6 +228,29 @@ The API returns consistent error responses:
 }
 ```
 
+## Troubleshooting
+
+### MongoDB Connection Issues
+
+If you encounter MongoDB connection errors like:
+- `Error: bad auth : Authentication failed`
+- `MongoNetworkError: failed to connect to server`
+- `ENOTFOUND` errors
+
+**See the comprehensive [MongoDB Setup & Troubleshooting Guide](./MONGODB_SETUP.md) for detailed solutions.**
+
+Quick fixes:
+1. **For local MongoDB without auth:** Use `MONGODB_URI=mongodb://localhost:27017/fileprocessing`
+2. **Check MongoDB is running:**
+   - Windows: `net start MongoDB`
+   - Linux/Mac: `sudo systemctl start mongod`
+3. **Verify credentials:** Double-check username and password in connection string
+4. **MongoDB Atlas:** Ensure IP is whitelisted in Network Access settings
+
+### Deprecated Warnings
+
+The warnings about `useNewUrlParser` and `useUnifiedTopology` have been fixed. These options are no longer needed in MongoDB Driver v4.0.0+.
+
 ## License
 
 ISC
