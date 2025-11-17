@@ -16,21 +16,67 @@ const executeConverter = async (inputFilePath, outputDir) => {
       fsSync.mkdirSync(outputDir, { recursive: true });
     }
 
-    // Path to integrated_pipelines.py
+    // Path to integrated_pipeline.py (note: no 's' at the end)
     // Adjust this path based on where RittDocConverter is cloned
     const converterScriptPath = process.env.CONVERTER_SCRIPT_PATH ||
-                                path.join(__dirname, '../../RittDocConverter/integrated_pipelines.py');
+                                path.join(__dirname, '../../RittDocConverter/integrated_pipeline.py');
 
-    // Python command with arguments
-    // Adjust the command format based on actual integrated_pipelines.py requirements
-    const command = `python3 "${converterScriptPath}" --input "${inputFilePath}" --output "${outputDir}"`;
+    // Check if script exists
+    if (!fsSync.existsSync(converterScriptPath)) {
+      return reject({
+        success: false,
+        message: `RittDocConverter script not found at: ${converterScriptPath}`,
+        error: 'Please set CONVERTER_SCRIPT_PATH in your .env file or clone RittDocConverter to the correct location'
+      });
+    }
+
+    // Determine Python command based on platform
+    const pythonCmd = process.platform === 'win32' ? 'python' : 'python3';
+
+    // Build command with proper quoting for Windows
+    const command = `"${pythonCmd}" "${converterScriptPath}" --input "${inputFilePath}" --output "${outputDir}"`;
 
     console.log('Executing conversion command:', command);
 
-    exec(command, { maxBuffer: 1024 * 1024 * 10 }, async (error, stdout, stderr) => {
+    // Set environment variables to handle Unicode on Windows
+    const execOptions = {
+      maxBuffer: 1024 * 1024 * 10, // 10MB buffer
+      env: {
+        ...process.env,
+        PYTHONIOENCODING: 'utf-8',  // Force UTF-8 encoding for Python I/O
+        PYTHONLEGACYWINDOWSSTDIO: '1'  // Enable UTF-8 on Windows legacy console
+      },
+      encoding: 'utf8'
+    };
+
+    exec(command, execOptions, async (error, stdout, stderr) => {
+      // Check if there are output files even if there's an error
+      // (RittDocConverter might print errors but still produce output)
+      let outputFiles = [];
+      try {
+        outputFiles = await getOutputFiles(outputDir);
+      } catch (err) {
+        console.error('Error reading output files:', err);
+      }
+
       if (error) {
         console.error('Conversion error:', error);
         console.error('stderr:', stderr);
+
+        // If we have output files despite the error, consider it a partial success
+        if (outputFiles.length > 0) {
+          console.log('Warning: Conversion completed with errors, but output files were generated');
+          return resolve({
+            success: true,
+            message: 'Document converted with warnings',
+            outputPath: outputDir,
+            outputFiles: outputFiles,
+            stdout: stdout,
+            stderr: stderr,
+            warnings: error.message
+          });
+        }
+
         return reject({
           success: false,
           message: 'Document conversion failed',
@@ -40,9 +86,6 @@ const executeConverter = async (inputFilePath, outputDir) => {
       }
 
       try {
-        // Read output directory to get generated files
-        const outputFiles = await getOutputFiles(outputDir);
-
         resolve({
           success: true,
           message: 'Document converted successfully',

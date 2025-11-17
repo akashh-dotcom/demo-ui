@@ -63,7 +63,7 @@ A robust backend API for handling user authentication and file processing with M
    Edit `.env` and update the following:
    - `MONGODB_URI`: Your MongoDB connection string
    - `JWT_SECRET`: A strong secret key for JWT
-   - `CONVERTER_SCRIPT_PATH`: Path to RittDocConverter's integrated_pipelines.py
+   - `CONVERTER_SCRIPT_PATH`: Path to RittDocConverter's integrated_pipeline.py
    - `FRONTEND_URL`: Your frontend URL (for CORS)
 
 4. **Start the server:**
@@ -151,7 +151,7 @@ Check server status
 4. Response is sent to user immediately
 5. File processing starts asynchronously:
    - Status changes to "processing"
-   - RittDocConverter's `integrated_pipelines.py` is executed
+   - RittDocConverter's `integrated_pipeline.py` is executed
    - Output files are saved to `outputs/:fileId/` directory
    - Status changes to "completed" with output file info
 6. User can download converted files via `/api/files/:id/download/:fileName`
