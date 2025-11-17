@@ -11,6 +11,32 @@ const fsSync = require('fs');
  */
 const executeConverter = async (inputFilePath, outputDir) => {
   return new Promise((resolve, reject) => {
+    // Validate input parameters
+    if (!inputFilePath || typeof inputFilePath !== 'string') {
+      return reject({
+        success: false,
+        message: 'Invalid input file path',
+        error: 'inputFilePath must be a valid string'
+      });
+    }
+
+    if (!outputDir || typeof outputDir !== 'string') {
+      return reject({
+        success: false,
+        message: 'Invalid output directory',
+        error: 'outputDir must be a valid string'
+      });
+    }
+
+    // Verify input file exists
+    if (!fsSync.existsSync(inputFilePath)) {
+      return reject({
+        success: false,
+        message: 'Input file not found',
+        error: `File does not exist: ${inputFilePath}`
+      });
+    }
+
     // Ensure output directory exists
     if (!fsSync.existsSync(outputDir)) {
       fsSync.mkdirSync(outputDir, { recursive: true });

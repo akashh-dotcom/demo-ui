@@ -55,11 +55,19 @@ const uploadFile = async (req, res) => {
 // @desc    Process file asynchronously
 const processFileAsync = async (file) => {
   try {
+    // Validate file object
+    if (!file || !file._id || !file.filePath) {
+      console.error('Invalid file object passed to processFileAsync:', file);
+      throw new Error('Invalid file object');
+    }
+
     // Update status to processing
     await file.updateStatus('processing');
 
     // Create output directory for this file
     const outputDir = path.join(__dirname, '../outputs', file._id.toString());
+
+    console.log(`Processing file ${file._id}: ${file.originalName}`);
 
     // Execute converter
     const result = await executeConverter(file.filePath, outputDir);
@@ -77,12 +85,18 @@ const processFileAsync = async (file) => {
     console.log(`File ${file._id} processed successfully`);
 
   } catch (error) {
-    // Update status to failed
-    await file.updateStatus('failed', {
-      errorMessage: error.message || 'Conversion failed'
-    });
+    console.error(`File processing failed:`, error);
 
-    console.error(`File ${file._id} processing failed:`, error);
+    // Try to update status to failed if file object is valid
+    if (file && file.updateStatus) {
+      try {
+        await file.updateStatus('failed', {
+          errorMessage: error.message || error.error || 'Conversion failed'
+        });
+      } catch (updateError) {
+        console.error('Failed to update file status:', updateError);
+      }
+    }
   }
 };
 
