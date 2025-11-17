@@ -40,21 +40,87 @@ const executeConverter = async (inputFilePath, outputDir) => {
       { shell: true }
     );
 
+    // Set timeout (default: 30 minutes, configurable via env)
+    const timeoutMs = parseInt(process.env.CONVERTER_TIMEOUT_MS || '1800000', 10);
+    const timeoutId = setTimeout(() => {
+      console.error(`Conversion timeout after ${timeoutMs}ms, killing process`);
+      pyProcess.kill('SIGTERM');
 
-    pyProcess.stdout.on('data', (data) => process.stdout.write(data.toString()));
-    pyProcess.stderr.on('data', (data) => process.stderr.write(data.toString()));
+      // Force kill after 5 seconds if still alive
+      setTimeout(() => {
+        if (!pyProcess.killed) {
+          console.error('Process did not terminate, force killing');
+          pyProcess.kill('SIGKILL');
+        }
+      }, 5000);
 
-    pyProcess.on('close', async (code) => {
+      reject({
+        success: false,
+        message: 'Conversion timeout - process took too long',
+        timeout: timeoutMs
+      });
+    }, timeoutMs);
+
+    let stdoutData = '';
+    let stderrData = '';
+
+    pyProcess.stdout.on('data', (data) => {
+      const str = data.toString();
+      stdoutData += str;
+      process.stdout.write(str);
+    });
+
+    pyProcess.stderr.on('data', (data) => {
+      const str = data.toString();
+      stderrData += str;
+      process.stderr.write(str);
+    });
+
+    pyProcess.on('error', (error) => {
+      clearTimeout(timeoutId);
+      console.error('Python process error:', error);
+      reject({
+        success: false,
+        message: 'Failed to start Python process',
+        error: error.message
+      });
+    });
+
+    pyProcess.on('close', async (code, signal) => {
+      clearTimeout(timeoutId);
+
+      if (signal) {
+        console.error(`Process killed with signal: ${signal}`);
+        return reject({
+          success: false,
+          message: `Conversion process was killed (${signal})`,
+          signal
+        });
+      }
+
       if (code !== 0) {
+        console.error(`Process exited with code ${code}`);
+        console.error('stderr output:', stderrData);
         return reject({
           success: false,
           message: 'Conversion failed',
-          code
+          code,
+          stderr: stderrData.slice(-500) // Last 500 chars of stderr
         });
       }
 
       try {
         const outputFiles = await getOutputFiles(outputDir);
+
+        if (outputFiles.length === 0) {
+          console.warn('No output files generated');
+          return reject({
+            success: false,
+            message: 'Conversion completed but no output files were generated'
+          });
+        }
+
+        console.log(`Conversion successful, generated ${outputFiles.length} files`);
         resolve({
           success: true,
           message: 'Document converted successfully',
