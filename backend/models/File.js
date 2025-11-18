@@ -11,7 +11,15 @@ const fileSchema = new mongoose.Schema({
   },
   filePath: {
     type: String,
-    required: true
+    required: false  // Deprecated - kept for backward compatibility
+  },
+  gridfsInputFileId: {
+    type: mongoose.Schema.Types.ObjectId,  // GridFS file reference for input file
+    required: false
+  },
+  storedInGridFS: {
+    type: Boolean,
+    default: true  // All new files will be stored in GridFS
   },
   fileType: {
     type: String,
@@ -43,7 +51,7 @@ const fileSchema = new mongoose.Schema({
     type: Date
   },
   outputPath: {
-    type: String
+    type: String  // Deprecated - kept for backward compatibility
   },
   outputFiles: [{
     fileName: String,

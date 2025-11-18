@@ -20,6 +20,46 @@ const initGridFS = () => {
 };
 
 /**
+ * Upload a file to GridFS from multer file object
+ * @param {Object} file - Multer file object
+ * @param {Object} metadata - Additional metadata to store
+ * @returns {Promise<Object>} - Object containing fileId and file info
+ */
+const uploadFileToGridFS = async (file, metadata = {}) => {
+  return new Promise((resolve, reject) => {
+    const bucket = initGridFS();
+
+    // Create upload stream
+    const uploadStream = bucket.openUploadStream(file.originalname, {
+      metadata: {
+        ...metadata,
+        uploadedAt: new Date(),
+        originalName: file.originalname,
+        mimeType: file.mimetype
+      }
+    });
+
+    // Create read stream from file path and pipe to GridFS
+    const readStream = fs.createReadStream(file.path);
+
+    readStream.pipe(uploadStream)
+      .on('error', (error) => {
+        console.error('Error uploading to GridFS:', error);
+        reject(error);
+      })
+      .on('finish', () => {
+        resolve({
+          fileId: uploadStream.id,
+          fileName: file.originalname,
+          fileSize: file.size,
+          fileType: path.extname(file.originalname).toLowerCase().replace('.', ''),
+          uploadedAt: new Date()
+        });
+      });
+  });
+};
+
+/**
  * Upload a file to GridFS
  * @param {string} filePath - Path to the file on disk
  * @param {string} fileName - Name to store the file as
@@ -180,10 +220,59 @@ const fileExistsInGridFS = async (fileId) => {
   }
 };
 
+/**
+ * Download a file from GridFS to local path (for processing)
+ * @param {ObjectId} fileId - GridFS file ID
+ * @param {string} destinationPath - Local path to save the file
+ * @returns {Promise<Object>} - Object with file info
+ */
+const downloadToLocal = async (fileId, destinationPath) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      const bucket = initGridFS();
+
+      // Convert string to ObjectId if needed
+      const objectId = typeof fileId === 'string' ? new mongoose.Types.ObjectId(fileId) : fileId;
+
+      // Get file info
+      const files = await bucket.find({ _id: objectId }).toArray();
+
+      if (!files || files.length === 0) {
+        return reject(new Error('File not found in GridFS'));
+      }
+
+      const file = files[0];
+
+      // Create download stream
+      const downloadStream = bucket.openDownloadStream(objectId);
+      const writeStream = fs.createWriteStream(destinationPath);
+
+      downloadStream.pipe(writeStream)
+        .on('error', (error) => {
+          console.error('Error downloading from GridFS to local:', error);
+          reject(error);
+        })
+        .on('finish', () => {
+          resolve({
+            fileName: file.filename,
+            fileSize: file.length,
+            filePath: destinationPath,
+            metadata: file.metadata
+          });
+        });
+    } catch (error) {
+      console.error('Error downloading from GridFS to local:', error);
+      reject(error);
+    }
+  });
+};
+
 module.exports = {
   initGridFS,
+  uploadFileToGridFS,
   uploadToGridFS,
   downloadFromGridFS,
+  downloadToLocal,
   deleteFromGridFS,
   uploadMultipleToGridFS,
   fileExistsInGridFS,

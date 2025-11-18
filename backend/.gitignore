@@ -8,6 +8,7 @@ package-lock.json
 # Uploads and outputs
 uploads/
 outputs/
+temp/
 
 # Logs
 logs/
