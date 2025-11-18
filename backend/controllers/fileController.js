@@ -1,12 +1,20 @@
 const File = require('../models/File');
 const path = require('path');
+const fs = require('fs');
 const { executeConverter, cleanupFile, cleanupDirectory } = require('../utils/docConverter');
-const { uploadMultipleToGridFS, deleteFromGridFS, downloadFromGridFS } = require('../utils/gridfs');
+const {
+  uploadFileToGridFS,
+  uploadMultipleToGridFS,
+  deleteFromGridFS,
+  downloadFromGridFS,
+  downloadToLocal
+} = require('../utils/gridfs');
 
 // @desc    Upload and process file
 // @route   POST /api/files/upload
 // @access  Private
 const uploadFile = async (req, res) => {
+  let tempFilePath = null;
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -14,18 +22,35 @@ const uploadFile = async (req, res) => {
 
     const { originalname, filename, path: filePath, size, mimetype } = req.file;
     const fileType = path.extname(originalname).toLowerCase().replace('.', '');
+    tempFilePath = filePath;
 
-    // Save file record in DB
+    console.log(`Uploading file to GridFS: ${originalname}`);
+
+    // Upload file to GridFS
+    const gridfsResult = await uploadFileToGridFS(req.file, {
+      uploadedBy: req.user._id,
+      fileType: fileType
+    });
+
+    console.log(`File uploaded to GridFS with ID: ${gridfsResult.fileId}`);
+
+    // Save file record in DB with GridFS reference
     const file = await File.create({
       originalName: originalname,
       fileName: filename,
-      filePath: filePath,
+      filePath: null,  // Not using local storage anymore
+      gridfsInputFileId: gridfsResult.fileId,
+      storedInGridFS: true,
       fileType: fileType,
       fileSize: size,
       mimeType: mimetype,
       uploadedBy: req.user._id,
       status: 'uploaded'
     });
+
+    // Clean up temporary uploaded file
+    await cleanupFile(tempFilePath);
+    console.log(`Cleaned up temporary file: ${tempFilePath}`);
 
     // Start async processing (don't wait for it to complete)
     processFileAsync(file);
@@ -37,8 +62,9 @@ const uploadFile = async (req, res) => {
       data: { file }
     });
   } catch (error) {
-    if (req.file) {
-      await cleanupFile(req.file.path);
+    // Clean up temporary file in case of error
+    if (tempFilePath) {
+      await cleanupFile(tempFilePath);
     }
 
     res.status(500).json({
@@ -51,23 +77,38 @@ const uploadFile = async (req, res) => {
 
 // @desc    Process file asynchronously
 const processFileAsync = async (file) => {
+  let tempInputPath = null;
+  let outputDir = null;
+
   try {
     // Validate file object
-    if (!file || !file._id || !file.filePath) {
+    if (!file || !file._id || !file.gridfsInputFileId) {
       console.error('Invalid file object passed to processFileAsync:', file);
-      throw new Error('Invalid file object');
+      throw new Error('Invalid file object - missing GridFS input file ID');
     }
 
     // Update status to processing
     await file.updateStatus('processing');
 
+    // Create temporary directory for this file's processing
+    const tempDir = path.join(__dirname, '../temp', file._id.toString());
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    // Download input file from GridFS to temporary location
+    tempInputPath = path.join(tempDir, file.originalName);
+    console.log(`Downloading input file from GridFS to: ${tempInputPath}`);
+    await downloadToLocal(file.gridfsInputFileId, tempInputPath);
+    console.log(`Input file downloaded successfully`);
+
     // Create output directory for this file
-    const outputDir = path.join(__dirname, '../outputs', file._id.toString());
+    outputDir = path.join(tempDir, 'output');
 
     console.log(`Processing file ${file._id}: ${file.originalName}`);
 
     // Execute converter
-    const result = await executeConverter(file.filePath, outputDir);
+    const result = await executeConverter(tempInputPath, outputDir);
 
     // Upload output files to GridFS
     console.log(`Uploading ${result.outputFiles.length} output files to GridFS...`);
@@ -80,17 +121,19 @@ const processFileAsync = async (file) => {
       }
     );
 
-    // Map GridFS file info to output files array (no local paths, everything in GridFS)
+    // Map GridFS file info to output files array (no local filePath)
     const outputFilesWithGridFS = result.outputFiles.map((file, index) => ({
       fileName: file.fileName,
+      filePath: null,  // Not storing local path anymore
       fileType: file.fileType,
       fileSize: file.fileSize,
       gridfsFileId: gridfsFiles[index].fileId,
       storedInGridFS: true
     }));
 
-    // Update file record with results (no outputPath, files are in GridFS)
+    // Update file record with results (no outputPath)
     await file.updateStatus('completed', {
+      outputPath: null,  // Not using local storage anymore
       outputFiles: outputFilesWithGridFS,
       conversionMetadata: {
         conversionType: 'RittDocConverter',
@@ -100,17 +143,28 @@ const processFileAsync = async (file) => {
 
     console.log(`File ${file._id} processed successfully and uploaded to GridFS`);
 
-    // Clean up temporary output directory after uploading to GridFS
+    // Clean up all temporary files
     try {
-      await cleanupDirectory(outputDir);
-      console.log(`Cleaned up temporary output directory: ${outputDir}`);
+      await cleanupDirectory(tempDir);
+      console.log(`Cleaned up temporary directory: ${tempDir}`);
     } catch (cleanupError) {
-      console.error('Error cleaning up output directory:', cleanupError);
+      console.error('Error cleaning up temporary directory:', cleanupError);
       // Don't fail the process if cleanup fails
     }
 
   } catch (error) {
     console.error(`File processing failed:`, error);
+
+    // Clean up temporary files in case of error
+    if (outputDir) {
+      try {
+        const tempDir = path.dirname(outputDir);
+        await cleanupDirectory(tempDir);
+        console.log(`Cleaned up temporary directory after error: ${tempDir}`);
+      } catch (cleanupError) {
+        console.error('Error cleaning up temporary directory after error:', cleanupError);
+      }
+    }
 
     // Try to update status to failed if file object is valid
     if (file && file.updateStatus) {
@@ -291,8 +345,16 @@ const deleteFile = async (req, res) => {
       });
     }
 
-    // Clean up input file from file system
-    await cleanupFile(file.filePath);
+    // Delete input file from GridFS
+    if (file.gridfsInputFileId) {
+      try {
+        await deleteFromGridFS(file.gridfsInputFileId);
+        console.log(`Deleted input file from GridFS: ${file.originalName}`);
+      } catch (error) {
+        console.error(`Error deleting input file from GridFS:`, error);
+        // Continue with other deletions even if one fails
+      }
+    }
 
     // Delete output files from GridFS
     if (file.outputFiles && file.outputFiles.length > 0) {
@@ -300,13 +362,21 @@ const deleteFile = async (req, res) => {
         if (outputFile.storedInGridFS && outputFile.gridfsFileId) {
           try {
             await deleteFromGridFS(outputFile.gridfsFileId);
-            console.log(`Deleted GridFS file: ${outputFile.fileName}`);
+            console.log(`Deleted output file from GridFS: ${outputFile.fileName}`);
           } catch (error) {
             console.error(`Error deleting GridFS file ${outputFile.fileName}:`, error);
             // Continue with other deletions even if one fails
           }
         }
       }
+    }
+
+    // Clean up any legacy local files (for backward compatibility)
+    if (file.filePath) {
+      await cleanupFile(file.filePath);
+    }
+    if (file.outputPath) {
+      await cleanupDirectory(file.outputPath);
     }
 
     await file.deleteOne();
