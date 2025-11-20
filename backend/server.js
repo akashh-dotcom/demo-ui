@@ -2,8 +2,6 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const path = require('path');
-const http = require('http');
-const { Server } = require('socket.io');
 const connectDB = require('./db/db');
 const multer = require('multer');
 
@@ -12,28 +10,6 @@ dotenv.config();
 
 // Initialize express app
 const app = express();
-const server = http.createServer(app);
-
-// Initialize Socket.IO with CORS
-const io = new Server(server, {
-  cors: {
-    origin: ['http://localhost:3000', 'http://localhost:4200', 'http://localhost:4201'],
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
-});
-
-// Make io available globally for use in other modules
-global.io = io;
-
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-
-  socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
-  });
-});
 
 // Connect to MongoDB
 connectDB();
@@ -122,13 +98,12 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`
 TPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPW
 Q   Server running on port ${PORT}                       Q
 Q   Environment: ${process.env.NODE_ENV || 'development'}                     Q
 Q   MongoDB: ${process.env.MONGODB_URI ? 'Connected' : 'Not configured'}                           Q
-Q   WebSocket: Enabled                                   Q
 ZPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPPP]
   `);
 });

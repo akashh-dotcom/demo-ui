@@ -1,174 +1,54 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useManuscripts } from '../hooks/useManuscripts';
 import { useDownload } from '../hooks/useDownload';
 import { useNotification } from '../contexts/NotificationContext';
-import { useRealtime } from '../hooks/useRealtime';
 import Navigation from '../components/shared/Navigation';
 import Loading from '../components/shared/Loading';
 import FileUpload from '../components/shared/FileUpload';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
-import {
-  CheckCircle,
-  Clock,
-  Upload,
-  FileText,
-  Download,
-  Trash2,
+import { 
+  CheckCircle, 
+  Clock, 
+  Upload, 
+  FileText, 
+  Download, 
+  Trash2, 
   AlertCircle,
   File,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  RefreshCw
 } from 'lucide-react';
 
 export const Manuscripts = () => {
   const { manuscripts, loading, getManuscripts, uploadManuscript, deleteManuscript, getDownloadUrl, uploadProgress } = useManuscripts();
   const { downloadFile } = useDownload();
   const { showSuccess, showError, handleError } = useNotification();
-  const { subscribeToProcessingProgress, isConnected } = useRealtime();
 
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
-  const [expandedFile, setExpandedFile] = useState(null); // Track which file is expanded
+  const [expandedFile, setExpandedFile] = useState(null);
+  const hasLoadedInitially = useRef(false);
 
-  // Track real-time processing data for each file
-  const [processingData, setProcessingData] = useState({});
-
+  // Initial load - ONLY ONCE
   useEffect(() => {
-    loadManuscripts();
+    if (!hasLoadedInitially.current) {
+      console.log('📥 Initial load of manuscripts');
+      loadManuscripts();
+      hasLoadedInitially.current = true;
+    }
   }, []);
-
-  // Debug: Log WebSocket connection status
-  useEffect(() => {
-    console.log('🔌 WebSocket connection status:', isConnected ? 'CONNECTED ✅' : 'DISCONNECTED ❌');
-  }, [isConnected]);
-
-  // Debug: Log processing data changes
-  useEffect(() => {
-    if (Object.keys(processingData).length > 0) {
-      console.log('📊 Processing data updated:', processingData);
-    }
-  }, [processingData]);
-
-  // Only poll when there are files being processed (backup to WebSocket)
-  useEffect(() => {
-    const hasProcessingFiles = manuscripts.some(
-      m => m.status === 'processing' || m.status === 'uploaded'
-    );
-
-    if (hasProcessingFiles && !isConnected) {
-      // Only poll if WebSocket is not connected (fallback)
-      const interval = setInterval(loadManuscripts, 5000);
-      return () => clearInterval(interval);
-    }
-  }, [manuscripts, isConnected]);
-
-  // Subscribe to WebSocket events for processing files
-  useEffect(() => {
-    const unsubscribers = [];
-
-    manuscripts.forEach((manuscript) => {
-      if (manuscript.status === 'processing' || manuscript.status === 'uploaded') {
-        console.log('🔔 Subscribing to processing events for file:', manuscript.id, manuscript.file_name);
-
-        const unsubscribe = subscribeToProcessingProgress(manuscript.id, (event) => {
-          console.log('📨 Processing event received:', {
-            type: event.type,
-            fileId: event.fileId,
-            manuscriptId: manuscript.id,
-            percentage: event.percentage,
-            message: event.message?.substring(0, 100) // First 100 chars
-          });
-
-          setProcessingData((prev) => {
-            const currentData = prev[manuscript.id] || {};
-
-            switch (event.type) {
-              case 'started':
-                console.log('✅ Processing started for:', manuscript.id);
-                return {
-                  ...prev,
-                  [manuscript.id]: {
-                    ...currentData,
-                    started: true,
-                    startedAt: event.timestamp
-                  }
-                };
-
-              case 'percentage':
-                console.log('📊 Percentage update:', event.percentage, '%');
-                return {
-                  ...prev,
-                  [manuscript.id]: {
-                    ...currentData,
-                    percentage: event.percentage
-                  }
-                };
-
-              case 'validation':
-                console.log('✅ Validation message:', event.message);
-                return {
-                  ...prev,
-                  [manuscript.id]: {
-                    ...currentData,
-                    validationMessage: event.message
-                  }
-                };
-
-              case 'progress':
-                return {
-                  ...prev,
-                  [manuscript.id]: {
-                    ...currentData,
-                    progressMessage: event.message
-                  }
-                };
-
-              case 'completed':
-                console.log('🎉 Processing completed for:', manuscript.id);
-                loadManuscripts();
-                return {
-                  ...prev,
-                  [manuscript.id]: {
-                    ...currentData,
-                    completed: true
-                  }
-                };
-
-              case 'failed':
-                console.log('❌ Processing failed for:', manuscript.id);
-                loadManuscripts();
-                return {
-                  ...prev,
-                  [manuscript.id]: {
-                    ...currentData,
-                    failed: true,
-                    error: event.error
-                  }
-                };
-
-              default:
-                return prev;
-            }
-          });
-        });
-
-        unsubscribers.push(unsubscribe);
-      }
-    });
-
-    // Cleanup all subscriptions
-    return () => {
-      unsubscribers.forEach(unsub => unsub());
-    };
-  }, [manuscripts, subscribeToProcessingProgress]);
 
   const loadManuscripts = async () => {
     try {
+      console.log('📂 Loading manuscripts from server...');
       await getManuscripts();
+      console.log('✓ Manuscripts loaded successfully');
     } catch (error) {
+      console.error('❌ Failed to load manuscripts:', error);
       handleError(error, 'Failed to load manuscripts');
     }
   };
@@ -176,11 +56,34 @@ export const Manuscripts = () => {
   const handleFileSelect = async (file) => {
     setUploading(true);
     try {
-      await uploadManuscript(file);
-      showSuccess('Upload Successful', `${file.name} has been uploaded successfully`);
+      console.log('📤 Starting file upload:', file.name);
+      const result = await uploadManuscript(file);
+      
+      console.log('✓ Upload result:', result);
+      
+      // REFRESH #1: Immediately after successful upload
+      console.log('🔄 REFRESH #1: Loading manuscripts after upload...');
+      await loadManuscripts();
+      
+      showSuccess(
+        'Upload Successful', 
+        `${file.name} has been uploaded successfully and is now being processed.`
+      );
+      
       setShowUploadModal(false);
+      
     } catch (error) {
-      handleError(error, 'Upload failed');
+      console.error('❌ Upload failed:', error);
+      
+      // Check if it's a timeout error
+      if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
+        handleError(
+          error, 
+          'Upload Timeout - The file upload took too long. Please try again with a smaller file or check your internet connection.'
+        );
+      } else {
+        handleError(error, 'Upload failed');
+      }
     } finally {
       setUploading(false);
     }
@@ -203,10 +106,18 @@ export const Manuscripts = () => {
       await deleteManuscript(deleteConfirm.id);
       showSuccess('Deleted', `${deleteConfirm.file_name} has been deleted`);
       setDeleteConfirm(null);
-      setExpandedFile(null); // Close expanded view after delete
+      setExpandedFile(null);
+      // Refresh list after delete
+      await loadManuscripts();
     } catch (error) {
       handleError(error, 'Delete failed');
     }
+  };
+
+  const handleManualRefresh = async () => {
+    console.log('🔄 Manual refresh triggered');
+    await loadManuscripts();
+    showSuccess('Refreshed', 'Manuscripts list has been updated');
   };
 
   const toggleFileExpand = (manuscriptId) => {
@@ -216,15 +127,15 @@ export const Manuscripts = () => {
   const getStatusInfo = (status) => {
     const statusMap = {
       uploaded: {
-        color: 'text-warning-700',
-        bgColor: 'bg-warning-50',
-        borderColor: 'border-warning-200',
-        icon: Upload,
-        label: 'Uploaded',
-        description: 'File uploaded to server'
+        color: 'text-blue-700',
+        bgColor: 'bg-blue-50',
+        borderColor: 'border-blue-200',
+        icon: Clock,
+        label: 'Processing',
+        description: 'Converting file formats'
       },
       processing: {
-        color: 'text-gray-700',
+        color: 'text-blue-700',
         bgColor: 'bg-blue-50',
         borderColor: 'border-blue-200',
         icon: Clock,
@@ -248,7 +159,7 @@ export const Manuscripts = () => {
         description: 'Conversion failed'
       },
     };
-    return statusMap[status] || statusMap.uploaded;
+    return statusMap[status] || statusMap.processing;
   };
 
   const getTrackingSteps = (status) => {
@@ -282,6 +193,10 @@ export const Manuscripts = () => {
     return matchesSearch && matchesStatus;
   });
 
+  const hasProcessingFiles = manuscripts.some(
+    m => m.status === 'processing' || m.status === 'uploaded'
+  );
+
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
       <Navigation />
@@ -292,18 +207,56 @@ export const Manuscripts = () => {
             <h1 className="text-4xl font-bold text-gray-900 mb-2">Manuscript Library</h1>
             <p className="text-gray-600">Manage and convert your digital manuscripts</p>
           </div>
-          <button
-            onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-            style={{ 
-              backgroundColor: '#4f7299',
-              border: '2px solid #3d5b7a'
-            }}
-          >
-            <Upload size={20} />
-            Upload Manuscript
-          </button>
+          <div className="flex gap-3">
+            {/* Manual Refresh Button */}
+            <button
+              onClick={handleManualRefresh}
+              disabled={loading}
+              className="flex items-center gap-2 px-4 py-3 rounded-lg font-semibold border-2 transition-all duration-200 hover:scale-105"
+              style={{ 
+                backgroundColor: loading ? '#e0e0e0' : '#e8f3f9',
+                borderColor: '#6890b8',
+                color: '#4f7299'
+              }}
+            >
+              <RefreshCw size={20} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+            
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="flex items-center gap-2 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+              style={{ 
+                backgroundColor: '#4f7299',
+                border: '2px solid #3d5b7a'
+              }}
+            >
+              <Upload size={20} />
+              Upload Manuscript
+            </button>
+          </div>
         </div>
+
+        {/* Info Banner - Processing Files */}
+        {hasProcessingFiles && (
+          <div className="mb-6 p-4 rounded-lg border-2" style={{
+            backgroundColor: '#e8f3f9',
+            borderColor: '#6890b8'
+          }}>
+            <div className="flex items-start gap-3">
+              <Clock size={20} style={{ color: '#4f7299' }} className="flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-sm mb-1" style={{ color: '#2c3e50' }}>
+                  Files Being Processed
+                </p>
+                <p className="text-sm" style={{ color: '#6890b8' }}>
+                  Your files are being converted. Click the <strong>"Refresh"</strong> button above to check for updates.
+                  The page will also automatically refresh when you upload a new file.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Search and Filter */}
         <div className="bg-white rounded-xl shadow-card border border-gray-200 p-6 mb-6">
@@ -327,7 +280,7 @@ export const Manuscripts = () => {
                 style={{ '--tw-ring-color': '#6890b8' }}
               >
                 <option value="all">All Status</option>
-                <option value="uploaded">Uploaded</option>
+                <option value="uploaded">Processing (Uploaded)</option>
                 <option value="processing">Processing</option>
                 <option value="completed">Completed</option>
                 <option value="failed">Failed</option>
@@ -354,7 +307,6 @@ export const Manuscripts = () => {
               const trackingSteps = getTrackingSteps(manuscript.status);
               const StatusIcon = statusInfo.icon;
               const isExpanded = expandedFile === manuscript.id;
-              const realtimeData = processingData[manuscript.id] || {};
 
               // Debug log for rendering
               if (manuscript.status === 'processing') {
@@ -372,15 +324,13 @@ export const Manuscripts = () => {
                   key={manuscript.id}
                   className="bg-white rounded-xl shadow-card border border-gray-200 hover:shadow-card-hover transition-all duration-200 animate-slide-in overflow-hidden"
                 >
-                  {/* Input File Row - Always Visible */}
+                  {/* Input File Row */}
                   <div
                     onClick={() => toggleFileExpand(manuscript.id)}
                     className="p-6 cursor-pointer hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex items-center justify-between">
-                      {/* File Info */}
                       <div className="flex items-center gap-4 flex-1 min-w-0">
-                        {/* Expand/Collapse Icon */}
                         <div className="flex-shrink-0">
                           {isExpanded ? (
                             <ChevronDown size={24} style={{ color: '#4f7299' }} />
@@ -389,12 +339,10 @@ export const Manuscripts = () => {
                           )}
                         </div>
 
-                        {/* File Icon */}
                         <div className="flex-shrink-0">
                           <File className="text-primary-600" size={32} style={{ color: '#4f7299' }} />
                         </div>
 
-                        {/* File Details */}
                         <div className="flex-1 min-w-0">
                           <h3 className="text-lg font-semibold text-gray-900 break-all mb-1">
                             {manuscript.file_name}
@@ -418,23 +366,17 @@ export const Manuscripts = () => {
                           </div>
                         </div>
 
-                        {/* Status Badge */}
-                        <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${statusInfo.bgColor} border ${statusInfo.borderColor} ${
-                          manuscript.status === 'processing' ? 'shadow-glow-blue animate-pulse-glow' :
-                          manuscript.status === 'completed' ? 'shadow-glow-green' : ''
-                        }`}>
+                        <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${statusInfo.bgColor} border ${statusInfo.borderColor}`}>
                           <StatusIcon size={18} className={statusInfo.color} />
                           <span className={`font-semibold text-sm ${statusInfo.color}`}>
-                            {manuscript.status === 'processing' && realtimeData.percentage !== undefined
-                              ? `Processing ${realtimeData.percentage.toFixed(1)}%`
-                              : statusInfo.label}
+                            {statusInfo.label}
                           </span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Expanded Content - Shows only when clicked */}
+                  {/* Expanded Content */}
                   {isExpanded && (
                     <div className="border-t border-gray-200 bg-gray-50 p-6 animate-slide-in">
                       {/* Tracking Progress */}
@@ -447,7 +389,6 @@ export const Manuscripts = () => {
                               return (
                                 <div key={step.id} className="flex-1">
                                   <div className="flex items-center">
-                                    {/* Step Circle */}
                                     <div className="relative flex flex-col items-center">
                                       <div
                                         className={`w-12 h-12 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${
@@ -456,7 +397,7 @@ export const Manuscripts = () => {
                                             : step.isCompleted
                                             ? 'bg-success-100 border-success-500 text-success-600'
                                             : step.isCurrent
-                                            ? 'border-2 text-white animate-status-pulse'
+                                            ? 'border-2 text-white'
                                             : 'bg-gray-100 border-gray-300 text-gray-400'
                                         }`}
                                         style={step.isCurrent ? {
@@ -479,7 +420,6 @@ export const Manuscripts = () => {
                                       </span>
                                     </div>
 
-                                    {/* Connector Line */}
                                     {index < trackingSteps.length - 1 && (
                                       <div className="flex-1 h-0.5 mx-2 relative top-[-20px]">
                                         <div
@@ -497,14 +437,21 @@ export const Manuscripts = () => {
                         </div>
                       </div>
 
-                      {/* Real-time Validation Message */}
-                      {realtimeData.validationMessage && (
-                        <div className="mb-6 p-4 bg-success-50 border border-success-200 rounded-lg">
+                      {/* Processing Notice */}
+                      {(manuscript.status === 'processing' || manuscript.status === 'uploaded') && (
+                        <div className="mb-6 p-4 rounded-lg border-2" style={{
+                          backgroundColor: '#e8f3f9',
+                          borderColor: '#6890b8'
+                        }}>
                           <div className="flex items-start gap-2">
-                            <CheckCircle className="text-success-600 flex-shrink-0 mt-0.5" size={18} />
+                            <Clock size={18} style={{ color: '#4f7299' }} className="flex-shrink-0 mt-0.5" />
                             <div>
-                              <p className="font-semibold text-success-900 text-sm">Validation Status:</p>
-                              <p className="text-success-700 text-sm mt-1 font-mono">{realtimeData.validationMessage}</p>
+                              <p className="font-semibold text-sm" style={{ color: '#2c3e50' }}>
+                                ⏳ Conversion in Progress
+                              </p>
+                              <p className="text-sm mt-1" style={{ color: '#6890b8' }}>
+                                Your file is being processed. Click the <strong>"Refresh"</strong> button above to check for updates.
+                              </p>
                             </div>
                           </div>
                         </div>
@@ -545,10 +492,9 @@ export const Manuscripts = () => {
                                       e.stopPropagation();
                                       handleDownload(manuscript, file.fileName);
                                     }}
-                                    className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-lg transition-all duration-200 group"
+                                    className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-lg hover:bg-blue-50 transition-all duration-200 group"
                                     style={{
-                                      border: '1px solid #6890b8',
-                                      '&:hover': { backgroundColor: '#e8f3f9' }
+                                      border: '1px solid #6890b8'
                                     }}
                                   >
                                     <div className="flex items-center gap-3">
@@ -571,13 +517,15 @@ export const Manuscripts = () => {
                             </div>
                           ) : (
                             <div className="text-center py-4">
-                              <Clock className="mx-auto text-gray-400 mb-2" size={24} />
+                              {(manuscript.status === 'processing' || manuscript.status === 'uploaded') && (
+                                <Clock className="mx-auto text-gray-400 mb-2" size={24} />
+                              )}
                               <p className="text-sm text-gray-600">
-                                {manuscript.status === 'processing'
+                                {manuscript.status === 'processing' || manuscript.status === 'uploaded'
                                   ? 'Files will be available after processing'
                                   : manuscript.status === 'failed'
                                   ? 'No files available due to error'
-                                  : 'Processing not started yet'}
+                                  : 'Processing not started'}
                               </p>
                             </div>
                           )}
@@ -591,7 +539,7 @@ export const Manuscripts = () => {
                           </div>
                           <div className="text-center py-4">
                             <p className="text-sm text-gray-600 mb-4">
-                              Permanently remove this manuscript and all associated files
+                              Permanently remove this manuscript and all files
                             </p>
                             <button
                               onClick={(e) => {
@@ -670,13 +618,13 @@ export const Manuscripts = () => {
         </div>
       )}
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation */}
       <ConfirmationDialog
         isOpen={!!deleteConfirm}
         onClose={() => setDeleteConfirm(null)}
         onConfirm={handleDelete}
         title="Delete Manuscript"
-        message={`Are you sure you want to delete "${deleteConfirm?.file_name}"? This action cannot be undone and will remove all associated files.`}
+        message={`Are you sure you want to delete "${deleteConfirm?.file_name}"? This action cannot be undone.`}
         confirmText="Delete Permanently"
         type="danger"
       />

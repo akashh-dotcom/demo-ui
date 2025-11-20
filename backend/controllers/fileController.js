@@ -108,27 +108,8 @@ const processFileAsync = async (file) => {
     const fileIdString = file._id.toString();
     console.log(`Processing file ${fileIdString}: ${file.originalName}`);
 
-    // Emit processing started event via WebSocket
-    if (global.io) {
-      console.log(`🚀 [WS] Emitting processing:started for fileId: ${fileIdString}`);
-      global.io.emit('processing:started', {
-        fileId: fileIdString,
-        fileName: file.originalName,
-        timestamp: new Date().toISOString()
-      });
-
-      // Emit a test percentage to verify WebSocket is working
-      console.log(`🧪 [WS] Emitting test percentage: 0% for fileId: ${fileIdString}`);
-      global.io.emit('processing:percentage', {
-        fileId: fileIdString,
-        percentage: 0,
-        timestamp: new Date().toISOString()
-      });
-    }
-
-    // Execute converter with fileId for WebSocket tracking
-    console.log(`🔧 Executing converter with fileId: ${fileIdString}`);
-    const result = await executeConverter(tempInputPath, outputDir, fileIdString);
+    // Execute converter
+    const result = await executeConverter(tempInputPath, outputDir);
 
     // Upload output files to GridFS
     console.log(`Uploading ${result.outputFiles.length} output files to GridFS...`);
@@ -163,24 +144,6 @@ const processFileAsync = async (file) => {
 
     console.log(`File ${file._id} processed successfully and uploaded to GridFS`);
 
-    // Emit processing completed event via WebSocket
-    if (global.io) {
-      // Emit 100% before completion
-      console.log(`🎯 [WS] Emitting final percentage: 100% for fileId: ${fileIdString}`);
-      global.io.emit('processing:percentage', {
-        fileId: fileIdString,
-        percentage: 100,
-        timestamp: new Date().toISOString()
-      });
-
-      console.log(`🎉 [WS] Emitting processing:completed for fileId: ${fileIdString}`);
-      global.io.emit('processing:completed', {
-        fileId: fileIdString,
-        fileName: file.originalName,
-        timestamp: new Date().toISOString()
-      });
-    }
-
     // Clean up all temporary files
     try {
       await cleanupDirectory(tempDir);
@@ -210,16 +173,6 @@ const processFileAsync = async (file) => {
         await file.updateStatus('failed', {
           errorMessage: error.message || error.error || 'Conversion failed'
         });
-
-        // Emit processing failed event via WebSocket
-        if (global.io) {
-          global.io.emit('processing:failed', {
-            fileId: file._id.toString(),
-            fileName: file.originalName,
-            error: error.message || error.error || 'Conversion failed',
-            timestamp: new Date().toISOString()
-          });
-        }
       } catch (updateError) {
         console.error('Failed to update file status:', updateError);
       }

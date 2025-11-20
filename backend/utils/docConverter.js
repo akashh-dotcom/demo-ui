@@ -7,10 +7,9 @@ const fsSync = require('fs');
  * Execute RittDocConverter pipeline
  * @param {string} inputFilePath - Path to the input file (PDF or EPUB)
  * @param {string} outputDir - Directory for output files
- * @param {string} fileId - MongoDB file ID for WebSocket tracking
  * @returns {Promise<Object>} - Result object with output files info
  */
-const executeConverter = async (inputFilePath, outputDir, fileId = null) => {
+const executeConverter = async (inputFilePath, outputDir) => {
   return new Promise((resolve, reject) => {
     // Validate input
     if (!inputFilePath || typeof inputFilePath !== 'string') {
@@ -28,6 +27,8 @@ const executeConverter = async (inputFilePath, outputDir, fileId = null) => {
       fsSync.mkdirSync(outputDir, { recursive: true });
     }
 
+    
+
     // Get paths
     const pythonPath = process.env.CONVERTER_PYTHON || 'python';
     const converterScriptPath = process.env.CONVERTER_SCRIPT_PATH ||
@@ -41,77 +42,9 @@ const executeConverter = async (inputFilePath, outputDir, fileId = null) => {
       { shell: true }
     );
 
-    // Helper function to emit WebSocket events
-    const emitProgress = (data) => {
-      if (global.io && fileId) {
-        global.io.emit('processing:progress', {
-          fileId,
-          message: data,
-          timestamp: new Date().toISOString()
-        });
-      }
-    };
 
-    // Capture stdout and emit via WebSocket
-    pyProcess.stdout.on('data', (data) => {
-      const output = data.toString();
-
-      // Log raw Python output for debugging
-      console.log(`[Python Output] ${output.trim()}`);
-
-      // Keep existing console output
-      process.stdout.write(output);
-
-      // Emit to WebSocket
-      emitProgress(output);
-
-      // Extract and emit specific progress information
-      // Match both decimal (100.0%) and integer (100%) formats
-      const percentMatch = output.match(/(\d+(?:\.\d+)?)%/);
-      if (percentMatch && global.io && fileId) {
-        const percentage = parseFloat(percentMatch[1]);
-        console.log(`📊 [WS] Emitting percentage: ${percentage}% for fileId: ${fileId}`);
-        console.log(`📊 [WS] Full line: ${output.trim()}`);
-        global.io.emit('processing:percentage', {
-          fileId,
-          percentage,
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // Check for validation messages
-      if (output.includes('DTD validation PASSED') && global.io && fileId) {
-        console.log(`✅ [WS] Emitting validation message for fileId: ${fileId}`);
-        console.log(`✅ [WS] Message content: ${output.trim()}`);
-        global.io.emit('processing:validation', {
-          fileId,
-          message: output.trim(),
-          timestamp: new Date().toISOString()
-        });
-      }
-
-      // Also check for other common progress indicators
-      if (output.includes('improvement') && global.io && fileId) {
-        console.log(`📈 [WS] Improvement message detected: ${output.trim()}`);
-      }
-    });
-
-    // Capture stderr and emit via WebSocket
-    pyProcess.stderr.on('data', (data) => {
-      const output = data.toString();
-
-      // Keep existing console output
-      process.stderr.write(output);
-
-      // Emit errors/warnings to WebSocket
-      if (global.io && fileId) {
-        global.io.emit('processing:error', {
-          fileId,
-          message: output,
-          timestamp: new Date().toISOString()
-        });
-      }
-    });
+    pyProcess.stdout.on('data', (data) => process.stdout.write(data.toString()));
+    pyProcess.stderr.on('data', (data) => process.stderr.write(data.toString()));
 
     pyProcess.on('close', async (code) => {
       if (code !== 0) {
