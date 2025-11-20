@@ -17,7 +17,7 @@ const server = http.createServer(app);
 // Initialize Socket.IO with CORS
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:4200', 'http://localhost:4201'],
+    origin: ['http://localhost:3000', 'http://localhost:4200', 'http://localhost:4201', 'http://localhost:4202'],
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -40,7 +40,7 @@ connectDB();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:4200', 'http://localhost:4201'], // allow frontend ports
+  origin: ['http://localhost:3000', 'http://localhost:4200', 'http://localhost:4201', 'http://localhost:4202'], // allow frontend ports
   credentials: true
 }));
 
