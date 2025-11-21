@@ -34,7 +34,22 @@ const executeConverter = async (inputFilePath, outputDir) => {
     const converterScriptPath = process.env.CONVERTER_SCRIPT_PATH ||
       path.join(__dirname, '../../RittDocConverter/integrated_pipeline.py');
 
-    console.log('Starting conversion:', inputFilePath);
+    console.log('========================================');
+    console.log('Starting conversion process');
+    console.log('Input file:', inputFilePath);
+    console.log('Output directory:', outputDir);
+    console.log('Python path:', pythonPath);
+    console.log('Converter script:', converterScriptPath);
+    console.log('========================================');
+
+    // Check if converter script exists
+    if (!fsSync.existsSync(converterScriptPath)) {
+      return reject({
+        success: false,
+        message: `Converter script not found at: ${converterScriptPath}`,
+        error: 'Please ensure RittDocConverter is installed and CONVERTER_SCRIPT_PATH is set correctly in .env'
+      });
+    }
 
     const pyProcess = spawn(
       pythonPath,
@@ -42,11 +57,28 @@ const executeConverter = async (inputFilePath, outputDir) => {
       { shell: true }
     );
 
+    // Handle spawn errors (e.g., Python not found)
+    pyProcess.on('error', (error) => {
+      console.error('Failed to start Python process:', error);
+      reject({
+        success: false,
+        message: 'Failed to start conversion process',
+        error: error.message
+      });
+    });
 
-    pyProcess.stdout.on('data', (data) => process.stdout.write(data.toString()));
-    pyProcess.stderr.on('data', (data) => process.stderr.write(data.toString()));
+    pyProcess.stdout.on('data', (data) => {
+      console.log('[CONVERTER STDOUT]:', data.toString());
+      process.stdout.write(data.toString());
+    });
+
+    pyProcess.stderr.on('data', (data) => {
+      console.error('[CONVERTER STDERR]:', data.toString());
+      process.stderr.write(data.toString());
+    });
 
     pyProcess.on('close', async (code) => {
+      console.log(`Python process exited with code: ${code}`);
       if (code !== 0) {
         return reject({
           success: false,
