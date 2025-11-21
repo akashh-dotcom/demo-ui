@@ -1,0 +1,15 @@
+[build]
+  # Build command for frontend
+  command = "cd frontend && npm install && npm run build"
+  # Directory to publish (frontend build output)
+  publish = "frontend/dist"
+
+# Environment variables for the build
+[build.environment]
+  NODE_VERSION = "18"
+
+# SPA redirect rules (backup to _redirects file)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

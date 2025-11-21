@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react';
 // Static app configuration - No backend proxy
 export default defineConfig({
   plugins: [react()],
-  base: '/xmlconverter/',
+  base: '/', // Deploy to root domain
   server: {
     port: 4202,
   },
