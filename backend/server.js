@@ -40,7 +40,7 @@ connectDB();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:4200', 'http://localhost:4201', 'http://localhost:4202'], // allow frontend ports
+  origin: ['http://localhost:3000', 'http://localhost:4200', 'http://localhost:4201', 'http://localhost:4202', 'https://nimble-squirrel-6c165e.netlify.app/p'], // allow frontend ports
   credentials: true
 }));
 
