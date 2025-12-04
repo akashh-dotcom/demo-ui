@@ -271,9 +271,12 @@ Error: Invalid login: 535-5.7.8 Username and Password not accepted
   - Use the 16-character App Password in `.env`
 
 ### Python Module Not Found Errors
+
+#### PDF Converter Errors
 ```
 ModuleNotFoundError: No module named 'openpyxl'
 ModuleNotFoundError: No module named 'PyMuPDF'
+ModuleNotFoundError: No module named 'camelot'
 ```
 
 **Cause:** Python dependencies for the PDF converter are not installed
@@ -297,6 +300,51 @@ cd ..
 npm start
 ```
 
+#### EPUB Converter Errors
+```
+ModuleNotFoundError: No module named 'ebooklib'
+ModuleNotFoundError: No module named 'epub_to_structured_v2'
+File not found: integrated_pipeline.py
+```
+
+**Cause:** RittDocConverter repository is not installed or missing dependencies
+
+**Solution:**
+
+**Step 1: Clone RittDocConverter (if not already done)**
+```bash
+cd backend
+git clone https://github.com/Zentrovia/RittDocConverter.git
+cd ..
+```
+
+**Step 2: Install EPUB converter dependencies**
+```bash
+cd backend/RittDocConverter
+
+# If requirements.txt exists:
+# Windows:
+python -m pip install -r requirements.txt
+
+# Linux/Mac:
+python3 -m pip install -r requirements.txt
+
+# If no requirements.txt exists, manually install:
+# Windows:
+python -m pip install ebooklib beautifulsoup4 lxml pillow
+
+# Linux/Mac:
+python3 -m pip install ebooklib beautifulsoup4 lxml pillow
+
+cd ../..
+
+# Restart the server
+cd backend
+npm start
+```
+
+#### General Solutions
+
 **If you get permission errors:**
 ```bash
 # Windows: Run Command Prompt as Administrator
@@ -308,11 +356,13 @@ python3 -m pip install --user -r requirements.txt
 
 **Using Virtual Environment (Recommended):**
 ```bash
+# For PDF Converter:
 # Windows
 cd backend/PDFtoXMLUsingExcel
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
+deactivate
 cd ..\..
 
 # Linux/Mac
@@ -320,7 +370,25 @@ cd backend/PDFtoXMLUsingExcel
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-cd ..
+deactivate
+cd ../..
+
+# For EPUB Converter:
+# Windows
+cd backend/RittDocConverter
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt  # or manually install packages
+deactivate
+cd ..\..
+
+# Linux/Mac
+cd backend/RittDocConverter
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt  # or manually install packages
+deactivate
+cd ../..
 ```
 
 ### Port Already in Use
