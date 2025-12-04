@@ -1,8 +1,8 @@
 # Quick Fix Guide - Current Errors
 
-This guide addresses the two errors you're currently experiencing.
+This guide addresses the errors you're currently experiencing with PDF and EPUB conversions.
 
-## Error 1: ModuleNotFoundError: No module named 'openpyxl'
+## Error 1: ModuleNotFoundError: No module named 'openpyxl' (PDF Converter)
 
 ### What's happening:
 The PDF converter Python script requires the `openpyxl` library, but it's not installed in your Python environment.
@@ -23,12 +23,6 @@ python3 -m pip install -r requirements.txt
 cd ../..
 ```
 
-Then restart your backend server:
-```bash
-cd backend
-npm start
-```
-
 ### What this installs:
 - openpyxl (Excel file support)
 - PyMuPDF (PDF parsing)
@@ -38,7 +32,63 @@ npm start
 
 ---
 
-## Error 2: Invalid login: 535-5.7.8 Username and Password not accepted
+## Error 2: ModuleNotFoundError: No module named 'ebooklib' (EPUB Converter)
+
+### What's happening:
+The EPUB converter (RittDocConverter) is either:
+1. Not installed (directory is empty)
+2. Missing Python dependencies
+
+### Quick Fix:
+
+**Step 1: Clone RittDocConverter Repository**
+
+```bash
+cd backend
+
+# Clone the RittDocConverter repository
+git clone https://github.com/Zentrovia/RittDocConverter.git
+
+cd ..
+```
+
+**Step 2: Install EPUB Converter Dependencies**
+
+If the RittDocConverter repository has a `requirements.txt` file:
+
+**Windows:**
+```bash
+cd backend\RittDocConverter
+python -m pip install -r requirements.txt
+cd ..\..
+```
+
+**Linux/Mac:**
+```bash
+cd backend/RittDocConverter
+python3 -m pip install -r requirements.txt
+cd ../..
+```
+
+**If no requirements.txt exists, manually install:**
+
+```bash
+# Windows:
+python -m pip install ebooklib beautifulsoup4 lxml pillow
+
+# Linux/Mac:
+python3 -m pip install ebooklib beautifulsoup4 lxml pillow
+```
+
+### What this installs:
+- ebooklib (EPUB parsing)
+- beautifulsoup4 (HTML/XML parsing)
+- lxml (XML processing)
+- pillow (Image processing)
+
+---
+
+## Error 3: Invalid login: 535-5.7.8 Username and Password not accepted (Email)
 
 ### What's happening:
 Gmail requires **App Passwords** for SMTP authentication. Your regular Gmail password will NOT work.
@@ -92,23 +142,51 @@ See: `backend/EMAIL_SETUP_GUIDE.md`
 
 To get your application working properly:
 
-1. ✅ **Install Python Dependencies** (Required for PDF conversion to work):
-   ```bash
-   cd backend/PDFtoXMLUsingExcel
-   python -m pip install -r requirements.txt  # Windows
-   # OR
-   python3 -m pip install -r requirements.txt  # Linux/Mac
-   ```
+### 1. ✅ **Install PDF Converter Dependencies** (Required for PDF conversion)
 
-2. ✅ **Fix Email Configuration** (Choose one):
-   - **Option A (Quick):** Set `EMAIL_ENABLED=false` in `backend/.env`
-   - **Option B (Full setup):** Generate Gmail App Password and configure `.env`
+```bash
+cd backend/PDFtoXMLUsingExcel
+python -m pip install -r requirements.txt  # Windows
+# OR
+python3 -m pip install -r requirements.txt  # Linux/Mac
+cd ../..
+```
 
-3. ✅ **Restart the server:**
-   ```bash
-   cd backend
-   npm start
-   ```
+### 2. ✅ **Install EPUB Converter** (Required for EPUB conversion)
+
+**Clone the repository:**
+```bash
+cd backend
+git clone https://github.com/Zentrovia/RittDocConverter.git
+cd ..
+```
+
+**Install dependencies:**
+```bash
+cd backend/RittDocConverter
+# If requirements.txt exists:
+python -m pip install -r requirements.txt  # Windows
+# OR
+python3 -m pip install -r requirements.txt  # Linux/Mac
+
+# If no requirements.txt, manually install:
+python -m pip install ebooklib beautifulsoup4 lxml pillow  # Windows
+# OR
+python3 -m pip install ebooklib beautifulsoup4 lxml pillow  # Linux/Mac
+cd ../..
+```
+
+### 3. ✅ **Fix Email Configuration** (Choose one)
+
+- **Option A (Quick):** Set `EMAIL_ENABLED=false` in `backend/.env`
+- **Option B (Full setup):** Generate Gmail App Password and configure `.env`
+
+### 4. ✅ **Restart the server**
+
+```bash
+cd backend
+npm start
+```
 
 ---
 
@@ -116,10 +194,28 @@ To get your application working properly:
 
 After completing these steps:
 
-✅ PDF conversion will work without `ModuleNotFoundError`
+✅ PDF conversion will work without `ModuleNotFoundError: No module named 'openpyxl'`
+✅ EPUB conversion will work without `ModuleNotFoundError: No module named 'ebooklib'`
+✅ Both PDF and EPUB files will process successfully
 ✅ Email notifications will either be disabled or working with proper authentication
-✅ File processing will complete successfully
 ✅ Users will receive email notifications (if enabled)
+✅ No more "Invalid login" errors
+✅ No more Windows Unicode encoding errors (UnicodeEncodeError)
+
+---
+
+## Windows-Specific Issue: Unicode Encoding Error (FIXED)
+
+If you saw this error:
+```
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713'
+```
+
+**Good news:** This has been fixed in the code! The UTF-8 encoding is now automatically set for all Python processes.
+
+**Note:** Even if you see this error, the conversion actually completes successfully. Check your files - they should be available for download despite the console error.
+
+For more details, see: `WINDOWS_UNICODE_FIX.md`
 
 ---
 

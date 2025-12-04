@@ -348,10 +348,18 @@ const executeEPUBConverter = async (inputFilePath, outputDir) => {
       });
     }
 
+    // Spawn Python process with UTF-8 encoding to avoid Windows console errors
     const pyProcess = spawn(
       pythonPath,
       [converterScriptPath, inputFilePath, outputDir],
-      { shell: true }
+      {
+        shell: true,
+        env: {
+          ...process.env,
+          PYTHONIOENCODING: 'utf-8',
+          PYTHONUTF8: '1'
+        }
+      }
     );
 
     let stdout = '';
