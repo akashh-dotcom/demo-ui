@@ -113,7 +113,7 @@ const processFileAsync = async (file) => {
     const fileIdString = file._id.toString();
     console.log(`Processing file ${fileIdString}: ${file.originalName}`);
 
-    // Execute converter
+    // Execute converter (automatically detects PDF or EPUB)
     const result = await executeConverter(tempInputPath, outputDir);
 
     // Upload output files to GridFS
@@ -123,7 +123,7 @@ const processFileAsync = async (file) => {
       {
         sourceFileId: file._id,
         uploadedBy: file.uploadedBy,
-        conversionType: 'RittDocConverter'
+        conversionType: result.converterType || 'Unknown'  // ✅ CHANGE #1: Dynamic converter type
       }
     );
 
@@ -142,7 +142,7 @@ const processFileAsync = async (file) => {
       outputPath: null,  // Not using local storage anymore
       outputFiles: outputFilesWithGridFS,
       conversionMetadata: {
-        conversionType: 'RittDocConverter',
+        conversionType: result.converterType || 'Unknown',  // ✅ CHANGE #2: Dynamic converter type
         outputFormats: result.outputFiles.map(f => f.fileType)
       }
     });
