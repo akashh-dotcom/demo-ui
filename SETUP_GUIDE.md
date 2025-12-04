@@ -263,8 +263,65 @@ Error: Invalid login: 535-5.7.8 Username and Password not accepted
 ```
 
 **Solution:**
-- Set `EMAIL_ENABLED=false` in `.env` to disable email notifications
-- Or set up proper Gmail App Password (see .env.example for instructions)
+- See detailed guide: `backend/EMAIL_SETUP_GUIDE.md`
+- Quick fix: Set `EMAIL_ENABLED=false` in `.env` to disable email notifications
+- For Gmail: You MUST use an App Password (not your regular password)
+  - Enable 2FA on Google Account
+  - Generate App Password at: Security > 2-Step Verification > App passwords
+  - Use the 16-character App Password in `.env`
+
+### Python Module Not Found Errors
+```
+ModuleNotFoundError: No module named 'openpyxl'
+ModuleNotFoundError: No module named 'PyMuPDF'
+```
+
+**Cause:** Python dependencies for the PDF converter are not installed
+
+**Solution:**
+```bash
+# Navigate to the PDF converter directory
+cd backend/PDFtoXMLUsingExcel
+
+# Install dependencies
+# Windows:
+python -m pip install -r requirements.txt
+
+# Linux/Mac:
+python3 -m pip install -r requirements.txt
+
+# Go back to backend directory
+cd ..
+
+# Restart the server
+npm start
+```
+
+**If you get permission errors:**
+```bash
+# Windows: Run Command Prompt as Administrator
+python -m pip install -r requirements.txt
+
+# Linux/Mac: Use --user flag
+python3 -m pip install --user -r requirements.txt
+```
+
+**Using Virtual Environment (Recommended):**
+```bash
+# Windows
+cd backend/PDFtoXMLUsingExcel
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements.txt
+cd ..\..
+
+# Linux/Mac
+cd backend/PDFtoXMLUsingExcel
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+cd ..
+```
 
 ### Port Already in Use
 ```
