@@ -200,6 +200,22 @@ After completing these steps:
 ✅ Email notifications will either be disabled or working with proper authentication
 ✅ Users will receive email notifications (if enabled)
 ✅ No more "Invalid login" errors
+✅ No more Windows Unicode encoding errors (UnicodeEncodeError)
+
+---
+
+## Windows-Specific Issue: Unicode Encoding Error (FIXED)
+
+If you saw this error:
+```
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713'
+```
+
+**Good news:** This has been fixed in the code! The UTF-8 encoding is now automatically set for all Python processes.
+
+**Note:** Even if you see this error, the conversion actually completes successfully. Check your files - they should be available for download despite the console error.
+
+For more details, see: `WINDOWS_UNICODE_FIX.md`
 
 ---
 
