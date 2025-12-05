@@ -1,0 +1,51 @@
+# RittDocConverter CLI Mode Configuration
+# ==========================================
+#
+# Simple configuration for CLI-only usage (no S3/SFTP)
+#
+# Usage:
+#   python3 batch_processor.py --mode cli --files file1.pdf file2.epub --publisher "MyPublisher"
+
+# Processing mode
+mode: cli
+
+# S3/SFTP Configuration (disabled for CLI mode)
+s3:
+  enabled: false
+
+# Processing Configuration
+processing:
+  # Supported file formats
+  supported_formats:
+    - ".pdf"
+    - ".epub"
+    - ".epub3"
+
+  # Maximum number of concurrent conversion jobs
+  max_concurrent_jobs: 2
+
+  # Timeout for each file conversion (seconds)
+  timeout_seconds: 3600
+
+  # Use font-only structure
+  font_only_structure: false
+
+  # Retry failed conversions
+  retry_failed: true
+
+  # Maximum retry attempts
+  max_retries: 3
+
+# Scheduler Configuration (not used in CLI mode)
+scheduler:
+  enabled: false
+
+# Logging
+log_level: "INFO"
+log_file: "logs/rittdoc.log"
+
+# File registry
+registry_db: "data/file_registry.db"
+
+# Output directory
+output_dir: "Output"

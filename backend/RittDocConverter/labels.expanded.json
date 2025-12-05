@@ -1,0 +1,100 @@
+{
+  "containers": [
+    {
+      "name": "book",
+      "element": "book",
+      "level": 0,
+      "singleton": true
+    },
+    {
+      "name": "chapter",
+      "element": "chapter",
+      "level": 1,
+      "parent": "book"
+    },
+    {
+      "name": "section",
+      "element": "section",
+      "level": 2,
+      "parent": "chapter"
+    },
+    {
+      "name": "subsection",
+      "element": "section",
+      "level": 3,
+      "parent": "section"
+    }
+  ],
+  "labels": [
+    {
+      "name": "book.title",
+      "container": "book",
+      "element": "title",
+      "description": "Book title",
+      "starts_container": false
+    },
+    {
+      "name": "chapter.title",
+      "container": "chapter",
+      "element": "title",
+      "description": "Chapter title",
+      "starts_container": true
+    },
+    {
+      "name": "chapter.para",
+      "container": "chapter",
+      "element": "para",
+      "description": "Chapter paragraph"
+    },
+    {
+      "name": "chapter.table",
+      "container": "chapter",
+      "element": "table",
+      "description": "Chapter table"
+    },
+    {
+      "name": "chapter.figure",
+      "container": "chapter",
+      "element": "figure",
+      "description": "Chapter figure"
+    },
+    {
+      "name": "section.title",
+      "container": "section",
+      "element": "title",
+      "description": "Section heading",
+      "starts_container": true
+    },
+    {
+      "name": "section.para",
+      "container": "section",
+      "element": "para",
+      "description": "Section paragraph"
+    },
+    {
+      "name": "section.table",
+      "container": "section",
+      "element": "table",
+      "description": "Section table"
+    },
+    {
+      "name": "section.figure",
+      "container": "section",
+      "element": "figure",
+      "description": "Section figure"
+    },
+    {
+      "name": "subsection.title",
+      "container": "subsection",
+      "element": "title",
+      "description": "Subsection heading",
+      "starts_container": true
+    },
+    {
+      "name": "subsection.para",
+      "container": "subsection",
+      "element": "para",
+      "description": "Subsection paragraph"
+    }
+  ]
+}

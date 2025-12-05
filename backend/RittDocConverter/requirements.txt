@@ -1,0 +1,51 @@
+# PDF to Docbook Pipeline - Python Requirements
+# ================================================
+# Install with: pip install --break-system-packages -r requirements.txt
+
+# Core PDF processing
+PyMuPDF>=1.23.0      # PDF reading and extraction (import as 'fitz')
+pdfminer.six>=20221105  # Alternative PDF text extraction
+
+# ePub processing
+EbookLib>=0.18       # ePub reading and extraction (EPUB2/EPUB3)
+beautifulsoup4>=4.12.0  # HTML/XML parsing for ePub content
+cairosvg>=2.7.0      # SVG to PNG conversion for ePub images
+
+# XML processing
+lxml>=4.9.0          # Fast XML processing
+xml-python>=0.4.3    # XML utilities
+
+# Image processing
+Pillow>=10.0.0       # Image manipulation
+opencv-python>=4.8.0 # Computer vision for image analysis (optional)
+
+# Document processing
+camelot-py[cv]>=0.11.0  # Table extraction (optional, if using Camelot)
+tabula-py>=2.8.0     # Alternative table extraction (optional)
+
+# Text processing
+python-Levenshtein>=0.21.0  # String similarity (optional)
+fuzzywuzzy>=0.18.0   # Fuzzy string matching (optional)
+
+# Named Entity Recognition (for heuristics.py)
+spacy>=3.7.0         # NER library
+# To download language model: python3 -m spacy download en_core_web_sm
+
+# Utilities
+pypdf>=3.17.0        # PDF metadata extraction
+python-magic>=0.4.27 # File type detection (optional)
+openpyxl>=3.1.0      # Excel file creation for conversion dashboard
+
+# Progress bars (makes pipeline more user-friendly)
+tqdm>=4.66.0         # Progress bars for long operations
+
+# Batch processing and S3 integration
+boto3>=1.28.0        # AWS S3 client
+PyYAML>=6.0          # YAML configuration parsing
+APScheduler>=3.10.0  # Job scheduling
+
+# Note for beginners:
+# - Install packages one by one if you get errors
+# - Some packages are optional (marked as "optional" above)
+# - Use --break-system-packages flag if on system Python
+# - Consider using a virtual environment for clean installation

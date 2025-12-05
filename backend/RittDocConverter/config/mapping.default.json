@@ -1,0 +1,57 @@
+{
+  "normalization": {
+    "collapse_internal_whitespace": true,
+    "preserve_ligatures": true,
+    "dehyphenate_line_endings": "safe",
+    "fix_split_words": true,
+    "log_every_change": true
+  },
+  "pdf": {
+    "heading_fonts": {
+      "H1": [{"family": "Times", "min_size": 20, "weight": "bold"}],
+      "H2": [{"family": "Times", "min_size": 16, "weight": "bold"}]
+    },
+    "paragraph_fonts": [{"family": "Times", "max_size": 13}],
+    "list_markers": ["•", "-", "—", "–"]
+  },
+  "classifier": {
+    "enabled": false,
+    "backend": "huggingface",
+    "model_path": "models/layout_classifier",
+    "label_map_path": "models/layout_classifier/label_map.json",
+    "threshold": 0.85,
+    "abstain_label": "abstain",
+    "fallback_label": "para",
+    "max_length": 256,
+    "batch_size": 8,
+    "monitoring": {
+      "log_predictions": false
+    }
+  },
+  "ner": {
+    "enabled": true,
+    "backend": "huggingface",
+    "model_name": "dslim/bert-base-NER",
+    "aggregation_strategy": "simple",
+    "label_groups": {
+      "person": ["PER", "PERSON"],
+      "organization": ["ORG"],
+      "location": ["LOC"],
+      "date": ["DATE"],
+      "misc": ["MISC", "TITLE", "WORK_OF_ART"]
+    },
+    "eligible_block_labels": ["para", "footnote", "list_item"],
+    "max_text_length": 2000
+  },
+  "docbook": {
+    "root": "book",
+    "dtd_system": "RITTDOCdtd/v1.1/RittDocBook.dtd"
+  },
+  "labels": {
+    "taxonomy_path": "config/labels.expanded.json"
+  },
+  "tolerances": {
+    "char_diff_per_page": 0,
+    "word_diff_percent": 0.1
+  }
+}

@@ -1,0 +1,487 @@
+# ePub Publisher Configuration
+# ================================================================================
+# This configuration file defines publisher profiles, confidence scoring rules,
+# and notification settings for automated ePub conversion quality tracking.
+#
+# Copy this file to epub_publishers.yaml and customize for your environment.
+# ================================================================================
+
+version: "1.0"
+updated: "2025-01-15"
+
+# Email Notification Settings
+# ================================================================================
+notifications:
+  enabled: true
+
+  # Email recipients (can be multiple)
+  recipients:
+    - "quality-review@example.com"
+    - "epub-processing@example.com"
+
+  # SMTP server configuration
+  smtp:
+    host: "smtp.gmail.com"  # Gmail SMTP (requires App Password)
+    port: 587
+    use_tls: true
+    # Credentials should be set via environment variables:
+    # SMTP_USER=noreply@example.com
+    # SMTP_PASSWORD=your-app-password
+
+  # Email subject templates
+  subject_template: "⚠️ ePub Requires Manual Review: {title}"
+
+  # Rate limiting to prevent spam
+  rate_limits:
+    max_per_minute: 1
+    max_per_hour: 50
+
+# Confidence Score Thresholds
+# ================================================================================
+thresholds:
+  auto_approve: 80    # >= 80: High confidence, no notification sent
+  notify: 50          # 50-79: Medium confidence, notify but proceed
+  manual_review: 0    # < 50: Low confidence, urgent notification
+
+# Publisher Profiles
+# ================================================================================
+# Define known publishers with their quality characteristics
+
+publishers:
+  # ============================================================================
+  # Premium Technical Publishers
+  # ============================================================================
+
+  "O'Reilly Media":
+    aliases:
+      - "O'Reilly"
+      - "O'Reilly & Associates"
+      - "O'Reilly Media, Inc."
+
+    # ISBN prefixes that identify this publisher
+    isbn_prefixes:
+      - "978-1-491"  # Current prefix
+      - "978-1-492"  # Current prefix
+      - "978-0-596"  # Legacy prefix
+      - "978-1-449"  # Legacy prefix
+
+    # Base confidence score (0-100)
+    confidence_base: 95
+
+    # Known issues with this publisher's ePubs
+    known_issues:
+      - "Code listings sometimes use images instead of <pre> tags"
+      - "Occasional WebP images in newer books"
+
+    # Internal notes
+    notes: "Consistently high quality, excellent semantic structure"
+
+    # Historical performance (updated automatically)
+    last_processed: "2025-01-10"
+    success_rate: 0.98
+    total_processed: 156
+
+  "Wiley":
+    aliases:
+      - "John Wiley & Sons"
+      - "Wiley-Blackwell"
+      - "Wiley Publishing"
+
+    isbn_prefixes:
+      - "978-1-118"
+      - "978-1-119"
+      - "978-0-470"
+      - "978-0-471"
+
+    confidence_base: 90
+
+    known_issues:
+      - "Complex tables occasionally need manual review"
+      - "Technical books may contain MathML"
+      - "Some series use fixed-layout for diagrams"
+
+    notes: "High quality, good structure, watch for MathML in academic texts"
+
+    last_processed: "2025-01-08"
+    success_rate: 0.94
+    total_processed: 89
+
+  "Pearson":
+    aliases:
+      - "Pearson Education"
+      - "Addison-Wesley"
+      - "Prentice Hall"
+      - "Pearson plc"
+
+    isbn_prefixes:
+      - "978-0-134"
+      - "978-0-321"
+      - "978-0-13"
+
+    confidence_base: 88
+
+    known_issues:
+      - "Academic texts often have complex equations"
+      - "May include interactive elements (will be lost in conversion)"
+      - "Footnotes can be complex"
+
+    notes: "Educational content, often includes pedagogical features"
+
+    last_processed: "2025-01-05"
+    success_rate: 0.91
+    total_processed: 124
+
+  "Springer":
+    aliases:
+      - "Springer Nature"
+      - "Springer-Verlag"
+
+    isbn_prefixes:
+      - "978-3-"  # Springer Germany
+      - "978-0-387"
+      - "978-1-4939"
+
+    confidence_base: 87
+
+    known_issues:
+      - "Heavy use of MathML in scientific texts"
+      - "Complex cross-references"
+      - "Multi-language support (may have special characters)"
+
+    notes: "Academic/scientific publisher, expect technical content"
+
+    last_processed: "2024-12-20"
+    success_rate: 0.89
+    total_processed: 67
+
+  "No Starch Press":
+    aliases:
+      - "No Starch"
+
+    isbn_prefixes:
+      - "978-1-59327"
+      - "978-1-7185"
+
+    confidence_base: 92
+
+    known_issues:
+      - "Heavy code listings (usually well-structured)"
+
+    notes: "Excellent technical publisher, programming focus"
+
+    last_processed: "2024-12-15"
+    success_rate: 0.96
+    total_processed: 34
+
+  # ============================================================================
+  # General Trade Publishers
+  # ============================================================================
+
+  "Penguin Random House":
+    aliases:
+      - "Penguin"
+      - "Random House"
+      - "Penguin Books"
+
+    isbn_prefixes:
+      - "978-0-14"   # Penguin
+      - "978-0-399"  # Random House
+      - "978-0-525"  # Crown
+
+    confidence_base: 85
+
+    known_issues:
+      - "Fiction: minimal structure issues"
+      - "May use decorative fonts (lost in conversion)"
+
+    notes: "Trade publisher, mostly fiction and narrative non-fiction"
+
+    success_rate: 0.88
+    total_processed: 45
+
+  "HarperCollins":
+    aliases:
+      - "Harper Collins"
+      - "Harper"
+
+    isbn_prefixes:
+      - "978-0-06"
+      - "978-0-06"
+
+    confidence_base: 84
+
+    known_issues:
+      - "Varies widely by imprint"
+
+    notes: "Large trade publisher with multiple imprints"
+
+    success_rate: 0.86
+    total_processed: 38
+
+  # ============================================================================
+  # Medium Quality / Conversion Tools
+  # ============================================================================
+
+  "Self-Published (Calibre)":
+    # This profile matches books generated by Calibre conversion tool
+    detection_patterns:
+      generator: ["calibre", "Calibre"]
+      no_accessibility_metadata: true
+
+    confidence_base: 60
+
+    known_issues:
+      - "Highly variable structure quality (depends on source)"
+      - "May have malformed HTML from conversion"
+      - "Inconsistent heading levels"
+      - "Often missing proper metadata"
+
+    notes: "Quality varies dramatically - requires per-book assessment"
+
+    success_rate: 0.72
+    total_processed: 45
+
+  "Self-Published (Kindle Create)":
+    detection_patterns:
+      generator: ["Kindle Create"]
+
+    confidence_base: 65
+
+    known_issues:
+      - "Amazon-specific formatting may not transfer well"
+      - "May use proprietary tags"
+
+    notes: "Amazon's tool, usually decent structure"
+
+    success_rate: 0.75
+    total_processed: 23
+
+  # ============================================================================
+  # Unknown / Default
+  # ============================================================================
+
+  "Unknown Publisher":
+    # This profile is used when publisher cannot be identified
+    detection_patterns:
+      publisher_name_missing: true
+
+    confidence_base: 50
+
+    known_issues:
+      - "Unknown quality level"
+      - "May have any combination of issues"
+      - "Manual review strongly recommended"
+
+    notes: "Default profile for unrecognized publishers"
+
+    success_rate: 0.65
+    total_processed: 23
+
+# ISBN Prefix Registry
+# ================================================================================
+# Quick lookup table for ISBN prefix -> Publisher mapping
+# This allows fast publisher identification without metadata parsing
+
+isbn_registry:
+  # O'Reilly
+  "978-0-596": "O'Reilly Media"
+  "978-1-491": "O'Reilly Media"
+  "978-1-492": "O'Reilly Media"
+  "978-1-449": "O'Reilly Media"
+
+  # Wiley
+  "978-1-118": "Wiley"
+  "978-1-119": "Wiley"
+  "978-0-470": "Wiley"
+  "978-0-471": "Wiley"
+
+  # Pearson
+  "978-0-134": "Pearson"
+  "978-0-321": "Pearson"
+  "978-0-13": "Pearson"
+
+  # Springer
+  "978-3-": "Springer"
+  "978-0-387": "Springer"
+  "978-1-4939": "Springer"
+
+  # No Starch Press
+  "978-1-59327": "No Starch Press"
+  "978-1-7185": "No Starch Press"
+
+  # Penguin Random House
+  "978-0-14": "Penguin Random House"
+  "978-0-399": "Penguin Random House"
+  "978-0-525": "Penguin Random House"
+
+  # HarperCollins
+  "978-0-06": "HarperCollins"
+
+# Issue Detection Rules
+# ================================================================================
+# Rules that adjust confidence score based on detected issues
+
+issue_detection:
+  # Missing metadata penalties
+  missing_metadata:
+    - field: "publisher"
+      penalty: -10
+      severity: "medium"
+      message: "No publisher information found"
+
+    - field: "title"
+      penalty: -20
+      severity: "high"
+      message: "No title metadata found"
+
+    - field: "isbn"
+      penalty: -5
+      severity: "low"
+      message: "No ISBN found - harder to track"
+
+    - field: "author"
+      penalty: -8
+      severity: "medium"
+      message: "No author metadata found"
+
+  # Structure issues
+  structure_issues:
+    - condition: "no_h1_headings"
+      penalty: -15
+      severity: "medium"
+      message: "No h1 headings found - chapters may be titled 'Untitled'"
+
+    - condition: "malformed_documents"
+      penalty: -20
+      severity: "high"
+      message: "Some documents failed to parse - may have HTML errors"
+
+    - condition: "no_spine"
+      penalty: -50
+      severity: "critical"
+      message: "No spine found - ePub may be corrupt"
+
+    - condition: "inconsistent_heading_levels"
+      penalty: -8
+      severity: "low"
+      message: "Heading levels skip (e.g., h1 to h4) - structure may be confusing"
+
+  # Content issues
+  content_issues:
+    - condition: "has_mathml"
+      penalty: -10
+      severity: "medium"
+      message: "MathML detected - mathematical formulas will become plain text"
+
+    - condition: "has_audio_video"
+      penalty: -5
+      severity: "low"
+      message: "Audio/video elements detected - will be ignored in conversion"
+
+    - condition: "fixed_layout"
+      penalty: -30
+      severity: "high"
+      message: "Fixed-layout ePub - visual layout will be lost"
+
+    - condition: "has_javascript"
+      penalty: -15
+      severity: "medium"
+      message: "JavaScript detected - interactive features will be lost"
+
+    - condition: "has_canvas"
+      penalty: -12
+      severity: "medium"
+      message: "HTML5 Canvas elements detected - will be lost"
+
+  # Image issues
+  image_issues:
+    - condition: "large_images"
+      penalty: -5
+      severity: "low"
+      message: "Images larger than 1MB detected - may slow processing"
+
+    - condition: "many_images"
+      penalty: -3
+      severity: "low"
+      message: "More than 100 images - processing will take time"
+
+    - condition: "svg_without_cairosvg"
+      penalty: -15
+      severity: "medium"
+      message: "SVG images present but cairosvg not installed - images will be skipped"
+
+    - condition: "base64_images"
+      penalty: -18
+      severity: "medium"
+      message: "Base64-encoded images detected - not currently extracted"
+
+    - condition: "remote_images"
+      penalty: -12
+      severity: "medium"
+      message: "Remote image URLs detected - will not be downloaded"
+
+  # Table issues
+  table_issues:
+    - condition: "complex_tables"
+      penalty: -8
+      severity: "low"
+      message: "Complex tables with irregular structure detected"
+
+    - condition: "nested_tables"
+      penalty: -10
+      severity: "medium"
+      message: "Nested tables detected - may not render correctly"
+
+# Notification Templates
+# ================================================================================
+
+notification_templates:
+  high_priority:
+    subject: "🚨 URGENT: ePub Conversion Requires Manual Review - {title}"
+    priority: "high"
+    condition: "confidence < 50"
+    recommended_actions:
+      - "Open the output ZIP and verify chapter structure"
+      - "Check if content is readable and properly formatted"
+      - "Verify all images are present and correctly placed"
+      - "Review any 'Untitled' chapters and rename if needed"
+      - "Consider rejecting this conversion and requesting a better source file"
+
+  medium_priority:
+    subject: "⚠️ ePub May Need Review: {title}"
+    priority: "normal"
+    condition: "50 <= confidence < 80"
+    recommended_actions:
+      - "Spot-check the output for major issues"
+      - "Review specific issues mentioned above"
+      - "Verify that any detected problems (MathML, tables, etc.) are acceptable"
+      - "Consider manual fixes if critical content is affected"
+
+  info:
+    subject: "ℹ️ ePub Processed with Warnings: {title}"
+    priority: "low"
+    condition: "confidence >= 80 AND has_warnings"
+    recommended_actions:
+      - "Review warnings if time permits"
+      - "Output should be usable as-is"
+      - "Consider noting issues for future reference"
+
+# Advanced Settings
+# ================================================================================
+
+advanced:
+  # Automatically update publisher stats after each conversion
+  auto_update_stats: true
+
+  # Log all confidence calculations for analysis
+  log_confidence_scores: true
+
+  # Path to confidence score log
+  confidence_log_path: "logs/confidence_scores.jsonl"
+
+  # Maximum age for publisher stats (days)
+  # Stats older than this are considered stale
+  stats_max_age_days: 180
+
+  # Minimum conversions before confidence is considered reliable
+  minimum_sample_size: 10

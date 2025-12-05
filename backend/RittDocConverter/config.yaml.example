@@ -1,0 +1,101 @@
+# RittDocConverter Batch Processing Configuration
+# ================================================
+#
+# Copy this file to config.yaml and customize for your environment
+#
+# Usage:
+#   python3 batch_processor.py --config config.yaml --mode automated --schedule
+
+# Processing mode: "cli" or "automated"
+# - cli: Process local files manually via command line
+# - automated: Monitor S3/SFTP folder and process automatically
+mode: automated
+
+# S3/SFTP Configuration
+s3:
+  # Enable S3 integration (required for automated mode)
+  enabled: true
+
+  # S3 bucket name
+  bucket_name: "your-bucket-name"
+
+  # AWS region
+  region: "us-east-1"
+
+  # AWS credentials (optional - will use environment variables if not specified)
+  # For security, prefer using environment variables:
+  #   export AWS_ACCESS_KEY_ID=your_key
+  #   export AWS_SECRET_ACCESS_KEY=your_secret
+  access_key_id: ""
+  secret_access_key: ""
+
+  # Custom endpoint URL (optional)
+  # Use this for:
+  #   - SFTP gateway (e.g., "https://sftp.example.com")
+  #   - MinIO or other S3-compatible services
+  #   - Leave empty for standard AWS S3
+  endpoint_url: ""
+
+  # Root folder prefix in S3 bucket
+  # Files should be organized as: {input_prefix}/{publisher_name}/{files}
+  # Example: "sftp/PublisherA/book1.pdf"
+  input_prefix: "sftp"
+
+  # Use SFTP mode (true) or regular S3 (false)
+  use_sftp: false
+
+# Processing Configuration
+processing:
+  # Supported file formats
+  supported_formats:
+    - ".pdf"
+    - ".epub"
+    - ".epub3"
+
+  # Maximum number of concurrent conversion jobs
+  # Adjust based on available CPU/memory
+  max_concurrent_jobs: 4
+
+  # Timeout for each file conversion (seconds)
+  # Default: 3600 (1 hour)
+  timeout_seconds: 3600
+
+  # Use font-only structure (skip heuristic labeling)
+  # Set to true for faster processing with less semantic labeling
+  font_only_structure: false
+
+  # Retry failed conversions
+  retry_failed: true
+
+  # Maximum retry attempts for failed files
+  max_retries: 3
+
+# Scheduler Configuration
+scheduler:
+  # Enable automatic scheduling
+  # When false, must use --schedule or --run-once flag
+  enabled: true
+
+  # Job interval in minutes
+  # Default: 60 (run every 1 hour)
+  interval_minutes: 60
+
+  # Run job immediately on startup
+  # When true, runs one job before starting scheduled runs
+  run_on_startup: false
+
+# Logging Configuration
+# Log level: DEBUG, INFO, WARNING, ERROR
+log_level: "INFO"
+
+# Log file path (set to null to disable file logging)
+log_file: "logs/rittdoc.log"
+
+# File registry database path
+# SQLite database for tracking processed files
+registry_db: "data/file_registry.db"
+
+# Output directory for results
+# In automated mode, files are uploaded to S3
+# In CLI mode, files are saved here locally
+output_dir: "Output"

@@ -1,0 +1,95 @@
+# RittDocConverter Production Configuration
+# ===========================================
+#
+# Production-ready configuration with automated S3/SFTP processing
+#
+# Setup:
+#   1. Copy this to config.yaml
+#   2. Update S3 credentials and bucket name
+#   3. Set environment variables for credentials (recommended):
+#        export AWS_ACCESS_KEY_ID=your_key
+#        export AWS_SECRET_ACCESS_KEY=your_secret
+#   4. Run: python3 batch_processor.py --config config.yaml --schedule
+#
+# S3 Folder Structure:
+#   s3://your-bucket/sftp/
+#     ├── PublisherA/
+#     │   ├── book1.pdf
+#     │   ├── book2.epub
+#     │   └── Output XML/
+#     │       ├── book1.zip
+#     │       └── book2.zip
+#     ├── PublisherB/
+#     │   ├── novel.epub
+#     │   └── Output XML/
+#     │       └── novel.zip
+#     └── PublisherC/
+#         └── ...
+
+# Processing mode
+mode: automated
+
+# S3/SFTP Configuration
+s3:
+  enabled: true
+
+  # YOUR S3 BUCKET NAME
+  bucket_name: "your-production-bucket"
+
+  # AWS region
+  region: "us-east-1"
+
+  # Credentials (prefer environment variables for security)
+  # Leave empty to use AWS credentials from environment or IAM role
+  access_key_id: ""
+  secret_access_key: ""
+
+  # Custom endpoint (for SFTP gateway or MinIO)
+  endpoint_url: ""
+
+  # Root folder in S3
+  input_prefix: "sftp"
+
+  # SFTP mode (set to true if using SFTP gateway)
+  use_sftp: false
+
+# Processing Configuration
+processing:
+  supported_formats:
+    - ".pdf"
+    - ".epub"
+    - ".epub3"
+
+  # Increase for production server with more resources
+  max_concurrent_jobs: 8
+
+  # 1 hour timeout per file
+  timeout_seconds: 3600
+
+  # Enable heuristic labeling for best quality
+  font_only_structure: false
+
+  # Retry failed files
+  retry_failed: true
+  max_retries: 3
+
+# Scheduler Configuration
+scheduler:
+  # Enable automatic scheduling
+  enabled: true
+
+  # Run every 1 hour
+  interval_minutes: 60
+
+  # Run initial job on startup
+  run_on_startup: true
+
+# Logging
+log_level: "INFO"
+log_file: "logs/rittdoc_production.log"
+
+# Registry database
+registry_db: "data/file_registry.db"
+
+# Output directory (for local copies/debugging)
+output_dir: "Output"

@@ -1,0 +1,186 @@
+================================================================================
+RITTDOCCONVERTER - UNUSED FILES ANALYSIS SUMMARY
+================================================================================
+Analysis Date: 2025-11-12
+Repository: /home/user/RittDocConverter
+
+QUICK REFERENCE
+===============
+Total Files to Remove: 8
+Total Size to Free: ~157.5 KB
+Estimated Complexity: Low (no active dependencies)
+
+FILES TO REMOVE (with absolute paths)
+=====================================
+
+CATEGORY 1: COMPLETELY UNUSED MODULES (5 files, 62.3 KB)
+---------------------------------------------------------
+
+1. /home/user/RittDocConverter/docbook.py (23.6 KB)
+   - Never imported anywhere
+   - Contains unused build_docbook_tree() function
+   - Superseded by flow_builder.py
+
+2. /home/user/RittDocConverter/label_taxonomy.py (3.7 KB)
+   - Only imported by docbook.py (which is unused)
+   - Orphaned dependency
+   - No active pipeline references
+
+3. /home/user/RittDocConverter/xml_merger.py (9.7 KB)
+   - Standalone CLI tool never invoked
+   - Functionality absorbed into flow_builder.py
+   - Has __main__ but never called
+
+4. /home/user/RittDocConverter/ner.py (9.5 KB)
+   - Unused utility library
+   - Optional HuggingFace dependency
+   - No pipeline integration
+
+5. /home/user/RittDocConverter/AUTO_TUNING_THRESHOLDS.py (19.8 KB)
+   - Experimental code never integrated
+   - Only has __main__ examples
+   - Heuristics use hardcoded thresholds instead
+
+CATEGORY 2: OBSOLETE BACKUPS (2 files, 59.3 KB)
+----------------------------------------------
+
+6. /home/user/RittDocConverter/flow_builder_backup.py (53.4 KB)
+   - Older version of flow_builder.py
+   - 1351 lines vs current 2427 lines (44% smaller)
+   - Missing 8+ commits of improvements
+   - Never referenced in pipeline
+
+7. /home/user/RittDocConverter/enrich_reading_order Backup.py (5.9 KB)
+   - Older version of enrich_reading_order.py
+   - 185 lines vs current 236 lines
+   - Current version is actively used
+   - Backup is subset of current functionality
+
+CATEGORY 3: SUPERSEDED IMPLEMENTATIONS (1 file, 32.0 KB)
+-------------------------------------------------------
+
+8. /home/user/RittDocConverter/epub_to_docbook_converter.py (32.0 KB)
+   - Duplicate of epub_to_structured.py
+   - Single commit history (b0f7593)
+   - Integrated pipeline uses ONLY epub_to_structured.py
+   - epub_to_structured has multiple bug fixes & improvements
+
+ACTIVE REQUIRED FILES (DO NOT REMOVE)
+====================================
+
+Pipeline Orchestrators:
+  /home/user/RittDocConverter/integrated_pipeline.py
+  /home/user/RittDocConverter/create_book_package.py
+
+PDF Pipeline:
+  /home/user/RittDocConverter/grid_reading_order.py
+  /home/user/RittDocConverter/enrich_reading_order.py
+  /home/user/RittDocConverter/font_roles_auto.py
+  /home/user/RittDocConverter/media_extractor_IgnoreVectorTabels.py
+
+Common/ePub Pipeline:
+  /home/user/RittDocConverter/flow_builder.py
+  /home/user/RittDocConverter/epub_to_structured.py
+  /home/user/RittDocConverter/package.py
+
+Supporting Modules:
+  /home/user/RittDocConverter/heuristics_Nov3.py (imported by flow_builder.py)
+  /home/user/RittDocConverter/enhanced_word_split_fixer.py (imported by heuristics_Nov3.py)
+
+DEPENDENCY GRAPH
+================
+
+Active Import Chain:
+  integrated_pipeline.py
+    ├─> package.py (package_docbook, make_file_fetcher)
+    ├─> [subprocess] grid_reading_order.py
+    ├─> [subprocess] enrich_reading_order.py
+    ├─> [subprocess] font_roles_auto.py
+    ├─> [subprocess] media_extractor_IgnoreVectorTabels.py
+    ├─> [subprocess] flow_builder.py
+    │    ├─> heuristics_Nov3.py (import: label_blocks function)
+    │    │    └─> enhanced_word_split_fixer.py (import: fix_word_splits_enhanced)
+    │    └─> [internal xml/etree operations]
+    └─> [subprocess] epub_to_structured.py
+
+Unused Import Chain:
+  docbook.py (UNUSED)
+    └─> label_taxonomy.py (ORPHANED)
+
+Standalone Unused:
+  xml_merger.py (has __main__ but never called)
+  ner.py (unused utility)
+  AUTO_TUNING_THRESHOLDS.py (unused experimental)
+  flow_builder_backup.py (obsolete backup)
+  enrich_reading_order Backup.py (obsolete backup)
+  epub_to_docbook_converter.py (superseded)
+
+REMOVAL PROCEDURE
+=================
+
+Safe Removal Steps:
+1. Verify these files are in git (they are)
+2. Run: rm /home/user/RittDocConverter/docbook.py
+3. Run: rm /home/user/RittDocConverter/label_taxonomy.py
+4. Run: rm /home/user/RittDocConverter/xml_merger.py
+5. Run: rm /home/user/RittDocConverter/ner.py
+6. Run: rm /home/user/RittDocConverter/AUTO_TUNING_THRESHOLDS.py
+7. Run: rm /home/user/RittDocConverter/flow_builder_backup.py
+8. Run: rm "/home/user/RittDocConverter/enrich_reading_order Backup.py"
+9. Run: rm /home/user/RittDocConverter/epub_to_docbook_converter.py
+10. Run: git add -A && git commit -m "Clean up unused, backup, and superseded files"
+
+Testing:
+1. Run: python3 /home/user/RittDocConverter/integrated_pipeline.py [test_pdf]
+2. Run: python3 /home/user/RittDocConverter/integrated_pipeline.py [test_epub]
+3. Verify pipeline.log or output for errors
+4. Confirm final ZIP packaging works
+
+GIT FORENSICS (Kept in History)
+===============================
+
+These files will remain in git history for forensics:
+  - Blame/log information preserved
+  - Can be restored: git checkout HEAD~N -- <filename>
+  - History viewable: git log -- <filename>
+  - Diff viewable: git show <commit>:<filename>
+
+This ensures no data loss despite removal from working directory.
+
+SIZE IMPACT
+===========
+
+Before cleanup: ~157.5 KB in 8 unused files
+After cleanup:  0 KB (all removed)
+Space freed:   ~157.5 KB
+
+Python Files Before: 20 files
+Python Files After:  12 files
+Reduction:          40% fewer files in active directory
+
+RECOMMENDATIONS
+===============
+
+Immediate:
+  - Remove all 8 files listed above
+  - No negative impact on functionality
+  - Improves code clarity
+
+Short-term (1-2 weeks):
+  - Run full test suite with both PDF and ePub inputs
+  - Monitor for any edge cases
+
+Medium-term (1-2 months):
+  - Consider refactoring heuristics_Nov3.py into flow_builder.py
+  - Rename heuristics_Nov3.py to reflect it's active (e.g., heuristics.py)
+  - Document the "Nov3" naming convention for future developers
+
+NOTES
+=====
+
+- These files are candidates for removal based on systematic analysis
+- No breaking changes expected from removal
+- Git history provides complete audit trail
+- All analysis based on import tracking and integrated_pipeline.py flow
+- Safe to proceed with removal
+

@@ -1,0 +1,49 @@
+# macOS system files
+.DS_Store
+# Python virtual environment
+venv/
+
+# macOS system file
+.DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.so
+
+# Generated output files
+Output/
+tmp/
+temp/
+multimedia_gridorder/
+epub_temp/
+
+# Input files you don't want to track
+Input/
+
+# Batch processing
+logs/
+*.log
+data/
+*.db
+
+# Configuration files (keep examples only)
+config.yaml
+!config*.example
+
+# Intermediate files
+reading_order.xml
+reading_order_enriched.xml
+font_roles.json
+media.xml
+structured.xml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~*_media_fixed.zip
+*_comprehensive_fixed.zip
