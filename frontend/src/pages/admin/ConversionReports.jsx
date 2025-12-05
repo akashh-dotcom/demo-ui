@@ -81,6 +81,10 @@ export const ConversionDashboard = () => {
       const allData = [];
       const sheets = new Set();
 
+      // Get API URL from environment variable with fallback
+      const apiUrl = import.meta.env.VITE_API_URL ;
+      console.log('🔧 Using API URL:', apiUrl);
+
       for (const file of files) {
         console.log('📂 Loading file:', file.originalName);
 
@@ -94,8 +98,9 @@ export const ConversionDashboard = () => {
         }
 
         const token = localStorage.getItem('manuscript_token');
-        const apiUrl = 'http://localhost:5000/api';
         const downloadUrl = `${apiUrl}/files/${file._id}/download/${encodeURIComponent(fileToDownload.fileName)}`;
+        
+        console.log('📥 Downloading from:', downloadUrl);
 
         const response = await axios.get(downloadUrl, {
           responseType: 'arraybuffer',
