@@ -1,0 +1,54 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:5.0
+    container_name: manuscript-mongo
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: manuscript-processor
+    # NOTE: remove or restrict this port in production to avoid exposing Mongo publicly
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  backend:
+    build:
+      context: ./backend
+    container_name: manuscript-backend
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      # Use docker service name for internal mongo access
+      MONGODB_URI: mongodb://mongo:27017/manuscript-processor
+      PORT: 5000
+      # must match the URL your browser will use to reach the frontend
+      FRONTEND_URL: http://<aws-public-ip>:3000
+    depends_on:
+      - mongo
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/uploads:/usr/src/app/uploads
+      - ./backend/outputs:/usr/src/app/outputs
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: manuscript-frontend
+    restart: unless-stopped
+    env_file:
+      - ./frontend/.env
+    environment:
+      # Browser-facing API URL — browser will call this hostname/ip
+      VITE_API_URL: http://<aws-public-ip>:5000/api
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+
+volumes:
+  mongo-data:
