@@ -11,8 +11,9 @@
 5. [Environment Configuration](#environment-configuration)
 6. [API Gateway](#api-gateway)
 7. [API Reference](#api-reference)
-8. [UI Integration Patterns](#ui-integration-patterns)
-9. [Developer Agent Prompts](#developer-agent-prompts)
+8. [Editor Component](#editor-component)
+9. [UI Integration Patterns](#ui-integration-patterns)
+10. [Developer Agent Prompts](#developer-agent-prompts)
 
 ---
 
@@ -601,6 +602,216 @@ const { fields } = await epubApi.get('/api/v1/config/dropdown-options');
 | `/api/v1/jobs/{id}` | DELETE | Cancel job |
 | `/api/v1/download/{id}` | GET | Download result ZIP |
 | `/api/v1/download/{id}/report` | GET | Download validation report |
+
+---
+
+## Editor Component
+
+The RittDoc Editor is a web-based component for viewing and editing DocBook XML, with synchronized viewing of the source EPUB/PDF. It supports Package Mode for multi-chapter books.
+
+### Editor Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                         RITTDOC EDITOR                                   │
+├────────────────────────────────┬────────────────────────────────────────┤
+│       SOURCE VIEWER            │          XML EDITOR                     │
+│                                │                                         │
+│   ┌──────────────────────┐    │   ┌─────────────────────────────────┐   │
+│   │                      │    │   │ <?xml version="1.0"?>           │   │
+│   │   EPUB/PDF Viewer    │    │   │ <book>                          │   │
+│   │                      │    │   │   <chapter>                     │   │
+│   │   (Continuous        │    │   │     <title>Chapter 1</title>    │   │
+│   │    Scrolling)        │    │   │     <para>Content...</para>     │   │
+│   │                      │    │   │   </chapter>                    │   │
+│   └──────────────────────┘    │   └─────────────────────────────────┘   │
+│                                │                                         │
+│   [ << ] Page 1/10 [ >> ]      │   Mode: [XML] [HTML Preview] [HTML Edit]│
+├────────────────────────────────┴────────────────────────────────────────┤
+│  Chapter Navigator: [ch001.xml] [ch002.xml] [ch003.xml] ...             │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Editor Deployment
+
+The editor runs as a separate Flask server (standalone or alongside the API):
+
+```bash
+# Standalone editor
+cd editor
+pip install -r requirements.txt
+python server.py --port 5000
+
+# With specific files
+python server.py --xml /path/to/doc.xml --pdf /path/to/file.epub
+```
+
+| Option | Description |
+|--------|-------------|
+| `--port` | Server port (default: 5000) |
+| `--host` | Bind address (default: 127.0.0.1) |
+| `--debug` | Enable debug mode |
+| `--xml` | Path to XML file to edit |
+| `--pdf` | Path to EPUB/PDF file for reference view |
+
+### Package Mode
+
+For multi-chapter EPUB conversions, the editor operates in **Package Mode**:
+
+1. **Book.XML**: Main DocBook file that references chapters via entities:
+   ```xml
+   <!DOCTYPE book SYSTEM "RittDocBook.dtd" [
+     <!ENTITY ch001 SYSTEM "ch001.xml">
+     <!ENTITY ch002 SYSTEM "ch002.xml">
+   ]>
+   <book>
+     &ch001;
+     &ch002;
+   </book>
+   ```
+
+2. **Chapter Files**: Individual XML files (ch001.xml, ch002.xml, etc.)
+
+3. **Combined View**: Editor combines all chapters for viewing while editing individual files
+
+4. **Auto-Reprocessing**: Saving triggers XSLT transformation, DTD fixes, and validation
+
+### Editor API Endpoints
+
+The editor exposes these REST API endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/` | GET | Main editor web interface |
+| `/api/init` | GET | Auto-detect and load latest output files |
+| `/api/init` | POST | Initialize with specific file paths |
+| `/api/pdf` | GET | Serve PDF file for viewer |
+| `/api/epub` | GET | Serve EPUB file for viewer |
+| `/api/media/<filename>` | GET | Serve media files (images) |
+| `/api/media-list` | GET | List available media files |
+| `/api/save` | POST | Save XML or HTML changes |
+| `/api/screenshot` | POST | Save screenshot from PDF viewer |
+| `/api/render-html` | POST | Convert XML to HTML preview |
+| `/api/render-book-html` | POST | Render combined book HTML |
+| `/api/validate-dtd` | POST | Validate XML against RittDoc DTD |
+
+**Package Mode Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/load-package` | POST | Load a ZIP package file |
+| `/api/chapters` | GET | List chapters in current package |
+| `/api/chapter/<filename>` | GET | Get specific chapter content |
+| `/api/save-chapter` | POST | Save changes to a chapter |
+| `/api/save-package` | POST | Save all changes and reprocess |
+
+### Integrating Editor with UI
+
+#### Option 1: Embed Editor in UI (iframe)
+
+```typescript
+// components/EditorEmbed.tsx
+export function EditorEmbed({ packagePath }: { packagePath: string }) {
+  const [editorUrl, setEditorUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Editor runs on separate port
+    const EDITOR_URL = process.env.NEXT_PUBLIC_EDITOR_URL || 'http://localhost:5000';
+
+    // Load package first
+    fetch(`${EDITOR_URL}/api/load-package`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zipPath: packagePath })
+    }).then(() => {
+      setEditorUrl(EDITOR_URL);
+    });
+  }, [packagePath]);
+
+  return editorUrl ? (
+    <iframe
+      src={editorUrl}
+      style={{ width: '100%', height: '800px', border: 'none' }}
+    />
+  ) : (
+    <div>Loading editor...</div>
+  );
+}
+```
+
+#### Option 2: Launch Editor in New Window
+
+```typescript
+// services/editor.ts
+export async function openEditor(jobId: string): Promise<void> {
+  const EDITOR_URL = process.env.NEXT_PUBLIC_EDITOR_URL || 'http://localhost:5000';
+
+  // Get job result to find package path
+  const job = await epubApi.get(`/api/v1/jobs/${jobId}/result`);
+
+  if (job.output_file) {
+    // Load package in editor
+    await fetch(`${EDITOR_URL}/api/load-package`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ zipPath: job.output_file })
+    });
+
+    // Open editor in new window
+    window.open(EDITOR_URL, '_blank', 'width=1400,height=900');
+  }
+}
+```
+
+#### Option 3: Editor API Proxy
+
+For deployment, proxy editor through the API gateway:
+
+```yaml
+# traefik.yml - Add editor routing
+http:
+  routers:
+    editor:
+      rule: "PathPrefix(`/editor`)"
+      service: editor-service
+  services:
+    editor-service:
+      loadBalancer:
+        servers:
+          - url: "http://editor:5000"
+```
+
+```typescript
+// Now access editor through gateway
+const EDITOR_URL = `${API_GATEWAY_URL}/editor`;
+```
+
+### Editor Workflow
+
+```
+┌────────────┐     ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
+│  Convert   │────►│  Edit in    │────►│  Save &      │────►│  Download   │
+│  EPUB      │     │  Editor     │     │  Reprocess   │     │  Final ZIP  │
+└────────────┘     └─────────────┘     └──────────────┘     └─────────────┘
+      │                  │                    │
+      ▼                  ▼                    ▼
+ POST /convert      Open Editor        POST /save-package
+ → job_id           (Package Mode)     → Validation
+                         │             → DTD Fixes
+                         ▼             → New ZIP
+                    Edit chapters
+                    Edit images
+                    Validate DTD
+```
+
+### Environment Variables for Editor
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `EDITOR_PORT` | Editor server port | 5000 |
+| `EDITOR_HOST` | Bind address | 127.0.0.1 |
+| `EDITOR_DEBUG` | Enable debug mode | false |
+| `NEXT_PUBLIC_EDITOR_URL` | Editor URL for UI | http://localhost:5000 |
 
 **Example: Upload and Convert**
 ```typescript
