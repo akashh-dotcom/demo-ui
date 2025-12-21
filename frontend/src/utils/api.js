@@ -313,6 +313,73 @@ export const getEpubPublishers = async () => {
   return response.data;
 };
 
+/**
+ * Create a new EPUB publisher
+ * @param {Object} publisherData - { name, config: {...} }
+ * @returns {Promise} - { publisher }
+ */
+export const createEpubPublisher = async (publisherData) => {
+  const response = await api.post('/config/epub/publishers', publisherData);
+  return response.data;
+};
+
+/**
+ * Update an EPUB publisher
+ * @param {String} name - Publisher name
+ * @param {Object} publisherData - Updated publisher data
+ * @returns {Promise} - { publisher }
+ */
+export const updateEpubPublisher = async (name, publisherData) => {
+  const response = await api.put(`/config/epub/publishers/${encodeURIComponent(name)}`, publisherData);
+  return response.data;
+};
+
+/**
+ * Delete an EPUB publisher
+ * @param {String} name - Publisher name
+ * @returns {Promise} - { message }
+ */
+export const deleteEpubPublisher = async (name) => {
+  const response = await api.delete(`/config/epub/publishers/${encodeURIComponent(name)}`);
+  return response.data;
+};
+
+/**
+ * Get EPUB configuration
+ * @returns {Promise} - { config }
+ */
+export const getEpubConfig = async () => {
+  const response = await api.get('/config/epub/config');
+  return response.data;
+};
+
+/**
+ * Get EPUB dropdown options
+ * @returns {Promise} - { options }
+ */
+export const getEpubDropdownOptions = async () => {
+  const response = await api.get('/config/epub/dropdown-options');
+  return response.data;
+};
+
+/**
+ * Get PDF service info
+ * @returns {Promise} - { info }
+ */
+export const getPdfServiceInfo = async () => {
+  const response = await api.get('/config/pdf/info');
+  return response.data;
+};
+
+/**
+ * Get EPUB service info
+ * @returns {Promise} - { info }
+ */
+export const getEpubServiceInfo = async () => {
+  const response = await api.get('/config/epub/info');
+  return response.data;
+};
+
 // ============================================
 // HEALTH CHECK
 // ============================================
