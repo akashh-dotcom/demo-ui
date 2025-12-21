@@ -381,6 +381,67 @@ export const getEpubServiceInfo = async () => {
 };
 
 // ============================================
+// ADMIN CONFIGURATION ENDPOINTS
+// ============================================
+
+/**
+ * Get admin configuration
+ * @returns {Promise} - { pdf, epub, useExternalApis }
+ */
+export const getAdminConfig = async () => {
+  const response = await api.get('/config/admin');
+  return response.data;
+};
+
+/**
+ * Update admin configuration
+ * @param {Object} config - { pdf, epub, useExternalApis }
+ * @returns {Promise} - { config }
+ */
+export const updateAdminConfig = async (config) => {
+  const response = await api.put('/config/admin', config);
+  return response.data;
+};
+
+/**
+ * Update PDF pipeline configuration
+ * @param {Object} pdfConfig - PDF configuration settings
+ * @returns {Promise} - { config }
+ */
+export const updatePdfConfig = async (pdfConfig) => {
+  const response = await api.put('/config/admin/pdf', pdfConfig);
+  return response.data;
+};
+
+/**
+ * Update EPUB pipeline configuration
+ * @param {Object} epubConfig - EPUB configuration settings
+ * @returns {Promise} - { config }
+ */
+export const updateEpubConfig = async (epubConfig) => {
+  const response = await api.put('/config/admin/epub', epubConfig);
+  return response.data;
+};
+
+/**
+ * Reset configuration to defaults
+ * @returns {Promise} - { config }
+ */
+export const resetAdminConfig = async () => {
+  const response = await api.post('/config/admin/reset');
+  return response.data;
+};
+
+/**
+ * Get configuration dropdown options
+ * @returns {Promise} - { pdf: {...}, epub: {...} }
+ */
+export const getConfigOptions = async () => {
+  const response = await api.get('/config/admin/options');
+  return response.data;
+};
+
+// ============================================
 // HEALTH CHECK
 // ============================================
 

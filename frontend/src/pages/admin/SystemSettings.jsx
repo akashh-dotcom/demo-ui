@@ -17,16 +17,21 @@ import {
   Save,
   X,
   AlertCircle,
-  Loader2
+  Loader2,
+  RotateCcw,
+  Sliders
 } from 'lucide-react';
 import {
   checkExternalServicesHealth,
-  getPdfOptions,
-  getEpubSchema,
   getEpubPublishers,
   createEpubPublisher,
   updateEpubPublisher,
-  deleteEpubPublisher
+  deleteEpubPublisher,
+  getAdminConfig,
+  updatePdfConfig,
+  updateEpubConfig,
+  resetAdminConfig,
+  getConfigOptions
 } from '../../utils/api';
 
 export const SystemSettings = () => {
@@ -39,13 +44,20 @@ export const SystemSettings = () => {
   const [healthData, setHealthData] = useState(null);
   const [healthLoading, setHealthLoading] = useState(true);
 
-  // PDF config state
-  const [pdfOptions, setPdfOptions] = useState(null);
-  const [pdfLoading, setPdfLoading] = useState(false);
+  // Admin config state
+  const [adminConfig, setAdminConfig] = useState(null);
+  const [configOptions, setConfigOptions] = useState(null);
+  const [configLoading, setConfigLoading] = useState(false);
 
-  // EPUB config state
-  const [epubSchema, setEpubSchema] = useState(null);
-  const [epubLoading, setEpubLoading] = useState(false);
+  // PDF config form state
+  const [pdfForm, setPdfForm] = useState({});
+  const [pdfSaving, setPdfSaving] = useState(false);
+  const [pdfDirty, setPdfDirty] = useState(false);
+
+  // EPUB config form state
+  const [epubForm, setEpubForm] = useState({});
+  const [epubSaving, setEpubSaving] = useState(false);
+  const [epubDirty, setEpubDirty] = useState(false);
 
   // Publishers state
   const [publishers, setPublishers] = useState([]);
@@ -55,22 +67,28 @@ export const SystemSettings = () => {
   const [publisherForm, setPublisherForm] = useState({ name: '', config: {} });
   const [savingPublisher, setSavingPublisher] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [resetConfirm, setResetConfirm] = useState(false);
 
   // Load health data on mount
   useEffect(() => {
     loadHealthData();
+    loadAdminConfig();
   }, []);
 
   // Load tab-specific data when tab changes
   useEffect(() => {
-    if (activeTab === 'pdf' && !pdfOptions) {
-      loadPdfConfig();
-    } else if (activeTab === 'epub' && !epubSchema) {
-      loadEpubConfig();
-    } else if (activeTab === 'publishers' && publishers.length === 0) {
+    if (activeTab === 'publishers' && publishers.length === 0) {
       loadPublishers();
     }
   }, [activeTab]);
+
+  // Sync form state when admin config loads
+  useEffect(() => {
+    if (adminConfig) {
+      setPdfForm(adminConfig.pdf || {});
+      setEpubForm(adminConfig.epub || {});
+    }
+  }, [adminConfig]);
 
   const loadHealthData = async () => {
     setHealthLoading(true);
@@ -89,27 +107,19 @@ export const SystemSettings = () => {
     }
   };
 
-  const loadPdfConfig = async () => {
-    setPdfLoading(true);
+  const loadAdminConfig = async () => {
+    setConfigLoading(true);
     try {
-      const result = await getPdfOptions();
-      setPdfOptions(result.data);
+      const [configResult, optionsResult] = await Promise.all([
+        getAdminConfig(),
+        getConfigOptions()
+      ]);
+      setAdminConfig(configResult.data);
+      setConfigOptions(optionsResult.data);
     } catch (error) {
-      handleError(error, 'Failed to load PDF configuration');
+      console.error('Failed to load admin config:', error);
     } finally {
-      setPdfLoading(false);
-    }
-  };
-
-  const loadEpubConfig = async () => {
-    setEpubLoading(true);
-    try {
-      const result = await getEpubSchema();
-      setEpubSchema(result.data);
-    } catch (error) {
-      handleError(error, 'Failed to load EPUB configuration');
-    } finally {
-      setEpubLoading(false);
+      setConfigLoading(false);
     }
   };
 
@@ -122,6 +132,55 @@ export const SystemSettings = () => {
       handleError(error, 'Failed to load publishers');
     } finally {
       setPublishersLoading(false);
+    }
+  };
+
+  const handlePdfChange = (field, value) => {
+    setPdfForm(prev => ({ ...prev, [field]: value }));
+    setPdfDirty(true);
+  };
+
+  const handleEpubChange = (field, value) => {
+    setEpubForm(prev => ({ ...prev, [field]: value }));
+    setEpubDirty(true);
+  };
+
+  const handleSavePdfConfig = async () => {
+    setPdfSaving(true);
+    try {
+      await updatePdfConfig(pdfForm);
+      showSuccess('Configuration Saved', 'PDF pipeline configuration has been updated');
+      setPdfDirty(false);
+      await loadAdminConfig();
+    } catch (error) {
+      handleError(error, 'Failed to save PDF configuration');
+    } finally {
+      setPdfSaving(false);
+    }
+  };
+
+  const handleSaveEpubConfig = async () => {
+    setEpubSaving(true);
+    try {
+      await updateEpubConfig(epubForm);
+      showSuccess('Configuration Saved', 'EPUB pipeline configuration has been updated');
+      setEpubDirty(false);
+      await loadAdminConfig();
+    } catch (error) {
+      handleError(error, 'Failed to save EPUB configuration');
+    } finally {
+      setEpubSaving(false);
+    }
+  };
+
+  const handleResetConfig = async () => {
+    try {
+      await resetAdminConfig();
+      showSuccess('Configuration Reset', 'All settings have been reset to defaults');
+      setResetConfirm(false);
+      await loadAdminConfig();
+    } catch (error) {
+      handleError(error, 'Failed to reset configuration');
     }
   };
 
@@ -196,6 +255,58 @@ export const SystemSettings = () => {
     );
   };
 
+  const renderSelectField = (label, field, value, options, onChange, disabled = false) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <select
+        value={value || ''}
+        onChange={(e) => onChange(field, e.target.value)}
+        disabled={disabled}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100"
+      >
+        {options.map(opt => (
+          <option key={opt.value} value={opt.value}>{opt.label}</option>
+        ))}
+      </select>
+    </div>
+  );
+
+  const renderNumberField = (label, field, value, onChange, min, max, step = 1, disabled = false) => (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <input
+        type="number"
+        value={value ?? ''}
+        onChange={(e) => onChange(field, parseFloat(e.target.value))}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent disabled:bg-gray-100"
+      />
+    </div>
+  );
+
+  const renderToggleField = (label, field, value, onChange, disabled = false) => (
+    <div className="flex items-center justify-between py-2">
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <button
+        type="button"
+        onClick={() => onChange(field, !value)}
+        disabled={disabled}
+        className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 ${
+          value ? 'bg-purple-600' : 'bg-gray-200'
+        } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+      >
+        <span
+          className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+            value ? 'translate-x-5' : 'translate-x-0'
+          }`}
+        />
+      </button>
+    </div>
+  );
+
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
       <Navigation />
@@ -206,6 +317,13 @@ export const SystemSettings = () => {
             <h1 className="text-3xl font-bold text-gray-900">System Settings</h1>
             <p className="text-gray-600 mt-1">Configure pipeline settings and manage publishers</p>
           </div>
+          <button
+            onClick={() => setResetConfirm(true)}
+            className="flex items-center gap-2 px-4 py-2 text-red-600 border border-red-600 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            <RotateCcw size={18} />
+            Reset All
+          </button>
         </div>
 
         {/* Tabs */}
@@ -302,6 +420,13 @@ export const SystemSettings = () => {
                           : 'External APIs are DISABLED. Files are processed locally using legacy converters.'}
                       </p>
                     </div>
+
+                    {/* Last Updated */}
+                    {adminConfig?.updatedAt && (
+                      <div className="md:col-span-2 text-sm text-gray-500 text-center">
+                        Configuration last updated: {new Date(adminConfig.updatedAt).toLocaleString()}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -311,89 +436,96 @@ export const SystemSettings = () => {
             {activeTab === 'pdf' && (
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-gray-900">PDF Pipeline Configuration</h2>
-                  <button
-                    onClick={loadPdfConfig}
-                    disabled={pdfLoading}
-                    className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-600 rounded-lg hover:bg-purple-50 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw size={18} className={pdfLoading ? 'animate-spin' : ''} />
-                    Refresh
-                  </button>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">PDF Pipeline Configuration</h2>
+                    <p className="text-sm text-gray-500 mt-1">These settings will be used for all new PDF conversions</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={loadAdminConfig}
+                      disabled={configLoading}
+                      className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-600 rounded-lg hover:bg-purple-50 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw size={18} className={configLoading ? 'animate-spin' : ''} />
+                      Refresh
+                    </button>
+                    <button
+                      onClick={handleSavePdfConfig}
+                      disabled={pdfSaving || !pdfDirty}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                        pdfDirty
+                          ? 'bg-purple-600 text-white hover:bg-purple-700'
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {pdfSaving ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <Save size={18} />
+                      )}
+                      Save Changes
+                    </button>
+                  </div>
                 </div>
 
-                {pdfLoading ? (
+                {configLoading ? (
                   <Loading />
-                ) : pdfOptions ? (
+                ) : configOptions ? (
                   <div className="space-y-6">
-                    {/* Output Formats */}
-                    {pdfOptions.outputFormats && (
-                      <div className="border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-3">Output Formats</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {pdfOptions.outputFormats.map((format) => (
-                            <span key={format} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                              {format.toUpperCase()}
-                            </span>
-                          ))}
-                        </div>
+                    {/* AI Configuration */}
+                    <div className="border rounded-lg p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Sliders size={20} className="text-purple-600" />
+                        <h3 className="font-semibold text-gray-900">AI Configuration</h3>
                       </div>
-                    )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderSelectField('AI Model', 'model', pdfForm.model, configOptions.pdf.models, handlePdfChange)}
+                        {renderNumberField('Temperature', 'temperature', pdfForm.temperature, handlePdfChange, 0, 1, 0.1)}
+                        {renderNumberField('Batch Size', 'batchSize', pdfForm.batchSize, handlePdfChange, 1, 20)}
+                        {renderNumberField('Max Retries', 'maxRetries', pdfForm.maxRetries, handlePdfChange, 0, 10)}
+                      </div>
+                    </div>
 
-                    {/* Processing Modes */}
-                    {pdfOptions.processingModes && (
-                      <div className="border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-3">Processing Modes</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {pdfOptions.processingModes.map((mode) => (
-                            <span key={mode} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm capitalize">
-                              {mode}
-                            </span>
-                          ))}
-                        </div>
+                    {/* Processing Configuration */}
+                    <div className="border rounded-lg p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <FileText size={20} className="text-blue-600" />
+                        <h3 className="font-semibold text-gray-900">Processing Configuration</h3>
                       </div>
-                    )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderSelectField('Processing Mode', 'processingMode', pdfForm.processingMode, configOptions.pdf.processingModes, handlePdfChange)}
+                        {renderSelectField('DPI', 'dpi', pdfForm.dpi, configOptions.pdf.dpiOptions, handlePdfChange)}
+                        {renderSelectField('Language', 'language', pdfForm.language, configOptions.pdf.languages, handlePdfChange)}
+                        {renderNumberField('Retry Delay (ms)', 'retryDelay', pdfForm.retryDelay, handlePdfChange, 1000, 30000, 1000)}
+                      </div>
+                    </div>
 
-                    {/* Languages */}
-                    {pdfOptions.languages && (
-                      <div className="border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-3">Supported Languages</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {pdfOptions.languages.map((lang) => (
-                            <span key={lang} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm uppercase">
-                              {lang}
-                            </span>
-                          ))}
+                    {/* Output Configuration */}
+                    <div className="border rounded-lg p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <BookOpen size={20} className="text-green-600" />
+                        <h3 className="font-semibold text-gray-900">Output Configuration</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderSelectField('Template Type', 'templateType', pdfForm.templateType, configOptions.pdf.templateTypes, handlePdfChange)}
+                        {renderNumberField('TOC Depth', 'tocDepth', pdfForm.tocDepth, handlePdfChange, 1, 6)}
+                      </div>
+                      <div className="mt-4 border-t pt-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Output Options</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {renderToggleField('Create DOCX', 'createDocx', pdfForm.createDocx, handlePdfChange)}
+                          {renderToggleField('Create RittDoc', 'createRittdoc', pdfForm.createRittdoc, handlePdfChange)}
+                          {renderToggleField('Include Table of Contents', 'includeToc', pdfForm.includeToc, handlePdfChange)}
+                          {renderToggleField('Skip Extraction', 'skipExtraction', pdfForm.skipExtraction, handlePdfChange)}
                         </div>
                       </div>
-                    )}
-
-                    {/* AI Assistance */}
-                    {pdfOptions.aiAssistance && (
-                      <div className="border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-3">AI Assistance</h3>
-                        <div className="flex items-center gap-4">
-                          <span className={`px-3 py-1 rounded-full text-sm ${pdfOptions.aiAssistance.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600'}`}>
-                            {pdfOptions.aiAssistance.enabled ? 'Enabled' : 'Disabled'}
-                          </span>
-                          {pdfOptions.aiAssistance.models && (
-                            <div className="flex gap-2">
-                              {pdfOptions.aiAssistance.models.map((model) => (
-                                <span key={model} className="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full text-sm">
-                                  {model}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     <AlertCircle size={48} className="mx-auto mb-4 text-gray-400" />
                     <p>Unable to load PDF configuration.</p>
-                    <p className="text-sm">Make sure external APIs are enabled and the PDF service is running.</p>
+                    <p className="text-sm">Make sure you have admin privileges.</p>
                   </div>
                 )}
               </div>
@@ -403,82 +535,107 @@ export const SystemSettings = () => {
             {activeTab === 'epub' && (
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-xl font-semibold text-gray-900">EPUB Pipeline Configuration</h2>
-                  <button
-                    onClick={loadEpubConfig}
-                    disabled={epubLoading}
-                    className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-600 rounded-lg hover:bg-purple-50 transition-colors disabled:opacity-50"
-                  >
-                    <RefreshCw size={18} className={epubLoading ? 'animate-spin' : ''} />
-                    Refresh
-                  </button>
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">EPUB Pipeline Configuration</h2>
+                    <p className="text-sm text-gray-500 mt-1">These settings will be used for all new EPUB conversions</p>
+                  </div>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={loadAdminConfig}
+                      disabled={configLoading}
+                      className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-600 rounded-lg hover:bg-purple-50 transition-colors disabled:opacity-50"
+                    >
+                      <RefreshCw size={18} className={configLoading ? 'animate-spin' : ''} />
+                      Refresh
+                    </button>
+                    <button
+                      onClick={handleSaveEpubConfig}
+                      disabled={epubSaving || !epubDirty}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                        epubDirty
+                          ? 'bg-purple-600 text-white hover:bg-purple-700'
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {epubSaving ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <Save size={18} />
+                      )}
+                      Save Changes
+                    </button>
+                  </div>
                 </div>
 
-                {epubLoading ? (
+                {configLoading ? (
                   <Loading />
-                ) : epubSchema ? (
+                ) : configOptions ? (
                   <div className="space-y-6">
-                    {/* Output Formats */}
-                    {epubSchema.outputFormats && (
-                      <div className="border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-3">Output Formats</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {epubSchema.outputFormats.map((format) => (
-                            <span key={format} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                              {format.toUpperCase()}
-                            </span>
-                          ))}
-                        </div>
+                    {/* Output Configuration */}
+                    <div className="border rounded-lg p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <BookOpen size={20} className="text-green-600" />
+                        <h3 className="font-semibold text-gray-900">Output Configuration</h3>
                       </div>
-                    )}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderSelectField('Output Format', 'outputFormat', epubForm.outputFormat, configOptions.epub.outputFormats, handleEpubChange)}
+                        {renderSelectField('Chapter Split Option', 'chapterSplitOption', epubForm.chapterSplitOption, configOptions.epub.chapterSplitOptions, handleEpubChange)}
+                        {renderSelectField('Validation Rule', 'validationRule', epubForm.validationRule, configOptions.epub.validationRules, handleEpubChange)}
+                        {renderSelectField('Default Language', 'defaultLanguage', epubForm.defaultLanguage, configOptions.epub.languages, handleEpubChange)}
+                      </div>
+                    </div>
 
-                    {/* Chapter Split Options */}
-                    {epubSchema.chapterSplitOptions && (
-                      <div className="border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-3">Chapter Split Options</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {epubSchema.chapterSplitOptions.map((option) => (
-                            <span key={option} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm capitalize">
-                              {option.replace('-', ' ')}
-                            </span>
-                          ))}
+                    {/* Processing Options */}
+                    <div className="border rounded-lg p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Sliders size={20} className="text-purple-600" />
+                        <h3 className="font-semibold text-gray-900">Processing Options</h3>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {renderNumberField('Max Retries', 'maxRetries', epubForm.maxRetries, handleEpubChange, 0, 10)}
+                        {renderNumberField('Retry Delay (ms)', 'retryDelay', epubForm.retryDelay, handleEpubChange, 1000, 30000, 1000)}
+                      </div>
+                      <div className="mt-4 border-t pt-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-3">Processing Flags</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {renderToggleField('Preserve Metadata', 'preserveMetadata', epubForm.preserveMetadata, handleEpubChange)}
+                          {renderToggleField('Enable Validation', 'enableValidation', epubForm.enableValidation, handleEpubChange)}
+                          {renderToggleField('Generate Report', 'generateReport', epubForm.generateReport, handleEpubChange)}
                         </div>
                       </div>
-                    )}
+                    </div>
 
-                    {/* Metadata Fields */}
-                    {epubSchema.metadataFields && (
-                      <div className="border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-3">Metadata Fields</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {epubSchema.metadataFields.map((field) => (
-                            <span key={field} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm capitalize">
-                              {field}
-                            </span>
-                          ))}
-                        </div>
+                    {/* Default Publisher */}
+                    <div className="border rounded-lg p-6">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Settings size={20} className="text-orange-600" />
+                        <h3 className="font-semibold text-gray-900">Default Publisher</h3>
                       </div>
-                    )}
-
-                    {/* Validation Rules */}
-                    {epubSchema.validationRules && (
-                      <div className="border rounded-lg p-4">
-                        <h3 className="font-semibold text-gray-900 mb-3">Validation Rules</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {epubSchema.validationRules.map((rule) => (
-                            <span key={rule} className="px-3 py-1 bg-orange-100 text-orange-800 rounded-full text-sm capitalize">
-                              {rule}
-                            </span>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Default Publisher for New Conversions</label>
+                        <select
+                          value={epubForm.defaultPublisher || ''}
+                          onChange={(e) => handleEpubChange('defaultPublisher', e.target.value)}
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        >
+                          <option value="">None (Select at upload time)</option>
+                          {publishers.map(pub => (
+                            <option key={pub.id || pub.name} value={pub.id || pub.name}>
+                              {pub.name || pub.id}
+                            </option>
                           ))}
-                        </div>
+                        </select>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Configure publishers in the Publishers tab
+                        </p>
                       </div>
-                    )}
+                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
                     <AlertCircle size={48} className="mx-auto mb-4 text-gray-400" />
                     <p>Unable to load EPUB configuration.</p>
-                    <p className="text-sm">Make sure external APIs are enabled and the EPUB service is running.</p>
+                    <p className="text-sm">Make sure you have admin privileges.</p>
                   </div>
                 )}
               </div>
@@ -674,6 +831,17 @@ export const SystemSettings = () => {
         title="Delete Publisher"
         message={`Are you sure you want to delete "${deleteConfirm?.name || deleteConfirm?.id}"? This action cannot be undone.`}
         confirmText="Delete"
+        type="danger"
+      />
+
+      {/* Reset Confirmation */}
+      <ConfirmationDialog
+        isOpen={resetConfirm}
+        onClose={() => setResetConfirm(false)}
+        onConfirm={handleResetConfig}
+        title="Reset All Configuration"
+        message="Are you sure you want to reset all PDF and EPUB pipeline settings to their default values? This action cannot be undone."
+        confirmText="Reset All"
         type="danger"
       />
     </div>
