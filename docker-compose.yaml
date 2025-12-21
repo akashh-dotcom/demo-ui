@@ -25,9 +25,16 @@ services:
       MONGODB_URI: mongodb://mongo:27017/manuscript-processor
       PORT: 5000
       # must match the URL your browser will use to reach the frontend
-      FRONTEND_URL: http://<aws-public-ip>:3000
+      FRONTEND_URL: http://${HOST_IP:-localhost}:3000
+      # External API configuration (uses docker service names)
+      USE_EXTERNAL_APIS: ${USE_EXTERNAL_APIS:-true}
+      PDF_API_URL: http://pdf-api:8000
+      EPUB_API_URL: http://epub-api:5001
+      EPUB_EDITOR_URL: http://epub-api:5000
     depends_on:
       - mongo
+      - pdf-api
+      - epub-api
     ports:
       - "5000:5000"
     volumes:
@@ -43,12 +50,56 @@ services:
       - ./frontend/.env
     environment:
       # Browser-facing API URL — browser will call this hostname/ip
-      VITE_API_URL: http://<aws-public-ip>:5000/api
+      VITE_API_URL: http://${HOST_IP:-localhost}:5000/api
     depends_on:
       - backend
     ports:
       - "3000:3000"
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 
+  # ===============================
+  # External API Services (Mocks for Development)
+  # ===============================
+  # In production, replace these with your actual PDF/EPUB processing services
+  # or configure backend to point to external service URLs
+
+  pdf-api:
+    build:
+      context: ./mocks/pdf-api
+    container_name: manuscript-pdf-api
+    restart: unless-stopped
+    environment:
+      PORT: 8000
+    ports:
+      - "8000:8000"
+
+  epub-api:
+    build:
+      context: ./mocks/epub-api
+    container_name: manuscript-epub-api
+    restart: unless-stopped
+    environment:
+      PORT: 5001
+      EDITOR_PORT: 5000
+    ports:
+      - "5001:5001"
+
 volumes:
   mongo-data:
+
+# ===============================
+# Usage Instructions
+# ===============================
+# Development (with mock services):
+#   docker-compose up --build
+#
+# Production (with real external APIs):
+#   1. Remove or comment out pdf-api and epub-api services
+#   2. Set environment variables:
+#      - PDF_API_URL=https://your-pdf-api.example.com
+#      - EPUB_API_URL=https://your-epub-api.example.com
+#      - EPUB_EDITOR_URL=https://your-epub-editor.example.com
+#   3. docker-compose up --build
+#
+# Set HOST_IP for non-localhost deployments:
+#   HOST_IP=your-server-ip docker-compose up --build

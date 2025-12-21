@@ -231,6 +231,89 @@ export const deleteFile = async (fileId) => {
 };
 
 // ============================================
+// EDITOR / FINALIZE ENDPOINTS
+// ============================================
+
+/**
+ * Launch editor for a file
+ * @param {String} fileId - File ID
+ * @returns {Promise} - { editorUrl, status }
+ */
+export const launchEditor = async (fileId) => {
+  const response = await api.post(`/files/${fileId}/editor`);
+  return response.data;
+};
+
+/**
+ * Finalize a file after editing
+ * @param {String} fileId - File ID
+ * @returns {Promise} - { message, status }
+ */
+export const finalizeFile = async (fileId) => {
+  const response = await api.post(`/files/${fileId}/finalize`);
+  return response.data;
+};
+
+/**
+ * Get editor URL for a file that's currently being edited
+ * @param {String} fileId - File ID
+ * @returns {String|null} - Editor URL or null
+ */
+export const getEditorUrl = (fileId) => {
+  // This will be populated from the file data
+  return null;
+};
+
+// ============================================
+// EXTERNAL SERVICE CONFIG ENDPOINTS
+// ============================================
+
+/**
+ * Check health of external services
+ * @returns {Promise} - { pdf: {status}, epub: {status} }
+ */
+export const checkExternalServicesHealth = async () => {
+  const response = await api.get('/config/health');
+  return response.data;
+};
+
+/**
+ * Get aggregated dashboard from external services
+ * @returns {Promise} - { pdf: {...}, epub: {...}, combined: {...} }
+ */
+export const getExternalDashboard = async () => {
+  const response = await api.get('/config/dashboard');
+  return response.data;
+};
+
+/**
+ * Get PDF processing options
+ * @returns {Promise} - { outputFormats, processingModes, ... }
+ */
+export const getPdfOptions = async () => {
+  const response = await api.get('/config/pdf/options');
+  return response.data;
+};
+
+/**
+ * Get EPUB config schema
+ * @returns {Promise} - { outputFormats, chapterSplitOptions, ... }
+ */
+export const getEpubSchema = async () => {
+  const response = await api.get('/config/epub/schema');
+  return response.data;
+};
+
+/**
+ * Get EPUB publishers
+ * @returns {Promise} - { publishers: [...] }
+ */
+export const getEpubPublishers = async () => {
+  const response = await api.get('/config/epub/publishers');
+  return response.data;
+};
+
+// ============================================
 // HEALTH CHECK
 // ============================================
 
@@ -313,10 +396,30 @@ export const getFileStatusInfo = (status) => {
       color: 'yellow',
       description: 'File uploaded to server'
     },
+    pending: {
+      label: 'Pending',
+      color: 'yellow',
+      description: 'Waiting to be processed'
+    },
     processing: {
       label: 'Processing',
       color: 'blue',
       description: 'Converting file formats'
+    },
+    ready_for_review: {
+      label: 'Ready for Review',
+      color: 'purple',
+      description: 'Conversion complete, ready for editing'
+    },
+    editing: {
+      label: 'Editing',
+      color: 'orange',
+      description: 'Document is being edited'
+    },
+    finalizing: {
+      label: 'Finalizing',
+      color: 'blue',
+      description: 'Generating final output'
     },
     completed: {
       label: 'Completed',

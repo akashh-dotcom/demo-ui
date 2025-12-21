@@ -13,6 +13,7 @@ export const Dashboard = () => {
   const [stats, setStats] = useState({
     total: 0,
     processing: 0,
+    inReview: 0,
     completed: 0,
     failed: 0,
   });
@@ -45,17 +46,20 @@ export const Dashboard = () => {
   const calculateStats = (manuscriptsList) => {
     const statistics = {
       total: manuscriptsList.length,
-      processing: manuscriptsList.filter(m => 
-        m.status === 'processing' || m.status === 'uploaded' || m.status === 'pending'
+      processing: manuscriptsList.filter(m =>
+        m.status === 'processing' || m.status === 'uploaded' || m.status === 'pending' || m.status === 'finalizing'
       ).length,
-      completed: manuscriptsList.filter(m => 
+      inReview: manuscriptsList.filter(m =>
+        m.status === 'ready_for_review' || m.status === 'editing'
+      ).length,
+      completed: manuscriptsList.filter(m =>
         m.status === 'completed' || m.status === 'complete'
       ).length,
-      failed: manuscriptsList.filter(m => 
+      failed: manuscriptsList.filter(m =>
         m.status === 'failed'
       ).length,
     };
-    
+
     setStats(statistics);
   };
 
@@ -64,6 +68,9 @@ export const Dashboard = () => {
       uploaded: 'bg-yellow-100 text-yellow-800',
       pending: 'bg-yellow-100 text-yellow-800',
       processing: 'bg-blue-100 text-blue-800',
+      ready_for_review: 'bg-purple-100 text-purple-800',
+      editing: 'bg-orange-100 text-orange-800',
+      finalizing: 'bg-indigo-100 text-indigo-800',
       completed: 'bg-green-100 text-green-800',
       complete: 'bg-green-100 text-green-800',
       failed: 'bg-red-100 text-red-800',
@@ -76,6 +83,9 @@ export const Dashboard = () => {
       uploaded: 'Processing',
       pending: 'Pending',
       processing: 'Processing',
+      ready_for_review: 'Ready for Review',
+      editing: 'Editing',
+      finalizing: 'Finalizing',
       completed: 'Completed',
       complete: 'Completed',
       failed: 'Failed',
@@ -137,7 +147,7 @@ export const Dashboard = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
           <StatCard
             icon={
               <svg className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -149,7 +159,7 @@ export const Dashboard = () => {
             color="#6890b8"
             borderColor="#6890b8"
           />
-          
+
           <StatCard
             icon={
               <svg className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -161,7 +171,19 @@ export const Dashboard = () => {
             color="#3b82f6"
             borderColor="#3b82f6"
           />
-          
+
+          <StatCard
+            icon={
+              <svg className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            }
+            title="In Review"
+            value={stats.inReview}
+            color="#8b5cf6"
+            borderColor="#8b5cf6"
+          />
+
           <StatCard
             icon={
               <svg className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -173,7 +195,7 @@ export const Dashboard = () => {
             color="#10b981"
             borderColor="#10b981"
           />
-          
+
           <StatCard
             icon={
               <svg className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
