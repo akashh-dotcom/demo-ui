@@ -7,7 +7,9 @@ const {
   getFileById,
   downloadOutputFile,
   deleteFile,
-  getConversionDashboardFiles
+  getConversionDashboardFiles,
+  launchEditor,
+  finalizeFile
 } = require('../controllers/fileController');
 const { authenticate, authorizeAdmin } = require('../middleware/auth');
 const { upload, handleMulterError } = require('../middleware/upload');
@@ -36,5 +38,9 @@ router.get('/:id/download/:fileName', downloadOutputFile);
 
 // Delete file
 router.delete('/:id', deleteFile);
+
+// Editor endpoints (for external API integration)
+router.post('/:id/editor', launchEditor);
+router.post('/:id/finalize', finalizeFile);
 
 module.exports = router;

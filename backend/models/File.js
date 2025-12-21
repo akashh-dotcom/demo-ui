@@ -34,6 +34,21 @@ const fileSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // External API integration fields
+  externalJobId: {
+    type: String,
+    required: false,
+    index: true  // Index for faster lookups
+  },
+  externalService: {
+    type: String,
+    enum: ['pdf', 'epub', 'local'],  // 'local' for legacy backward compatibility
+    default: 'local'
+  },
+  editorUrl: {
+    type: String,
+    required: false  // URL to editor when in editing state
+  },
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -41,7 +56,16 @@ const fileSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['uploaded', 'processing', 'completed', 'failed'],
+    enum: [
+      'uploaded',           // File received, not yet sent to processing
+      'pending',            // Sent to external API, waiting to start
+      'processing',         // Being processed (extracting, converting)
+      'ready_for_review',   // PDF API: ready for editor review
+      'editing',            // User is editing in web editor
+      'finalizing',         // Creating final outputs
+      'completed',          // Done - outputs available
+      'failed'              // Error occurred
+    ],
     default: 'uploaded'
   },
   processingStartedAt: {
@@ -79,6 +103,7 @@ const fileSchema = new mongoose.Schema({
 // Index for faster queries
 fileSchema.index({ uploadedBy: 1, createdAt: -1 });
 fileSchema.index({ status: 1 });
+fileSchema.index({ externalJobId: 1, externalService: 1 });  // For external API job lookups
 
 // Method to update processing status
 fileSchema.methods.updateStatus = function(status, additionalData = {}) {

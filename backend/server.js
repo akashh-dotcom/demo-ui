@@ -74,10 +74,12 @@ app.use((req, res, next) => {
 // Import routes
 const userRoutes = require('./routes/userRoutes');
 const fileRoutes = require('./routes/fileRoutes');
+const configRoutes = require('./routes/configRoutes');
 
 // API Routes
 app.use('/api/users', userRoutes);
 app.use('/api/files', fileRoutes);
+app.use('/api/config', configRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -93,10 +95,12 @@ app.get('/', (req, res) => {
   res.status(200).json({
     success: true,
     message: 'Welcome to the File Processing API',
-    version: '1.0.0',
+    version: '2.0.0',
+    mode: process.env.USE_EXTERNAL_APIS === 'true' ? 'microservices' : 'local',
     endpoints: {
       users: '/api/users',
       files: '/api/files',
+      config: '/api/config',
       health: '/api/health'
     }
   });

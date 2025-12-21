@@ -2,7 +2,14 @@ const File = require('../models/File');
 const User = require('../models/User');
 const path = require('path');
 const fs = require('fs');
+
+// Legacy local converter (will be deprecated)
 const { executeConverter, cleanupFile, cleanupDirectory } = require('../utils/docConverter');
+
+// External API services
+const pdfApiService = require('../services/pdfApiService');
+const epubApiService = require('../services/epubApiService');
+
 const {
   uploadFileToGridFS,
   uploadMultipleToGridFS,
@@ -14,6 +21,9 @@ const {
   sendConversionSuccessEmail,
   sendConversionFailureEmail
 } = require('../utils/emailService');
+
+// Feature flag: use external APIs (set to true to enable)
+const USE_EXTERNAL_APIS = process.env.USE_EXTERNAL_APIS === 'true';
 
 // @desc    Upload and process file
 // @route   POST /api/files/upload
@@ -58,7 +68,11 @@ const uploadFile = async (req, res) => {
     console.log(`Cleaned up temporary file: ${tempFilePath}`);
 
     // Start async processing (don't wait for it to complete)
-    processFileAsync(file);
+    if (USE_EXTERNAL_APIS) {
+      processFileWithExternalApi(file);
+    } else {
+      processFileAsync(file);  // Legacy local processing
+    }
 
     // Return immediate response - processing will continue in background
     res.status(200).json({
@@ -224,6 +238,416 @@ const processFileAsync = async (file) => {
         console.error('Failed to update file status:', updateError);
       }
     }
+  }
+};
+
+// @desc    Process file using external PDF/EPUB APIs
+const processFileWithExternalApi = async (file) => {
+  let tempInputPath = null;
+
+  try {
+    // Validate file object
+    if (!file || !file._id || !file.gridfsInputFileId) {
+      console.error('Invalid file object passed to processFileWithExternalApi:', file);
+      throw new Error('Invalid file object - missing GridFS input file ID');
+    }
+
+    // Update status to pending (waiting for external API)
+    await file.updateStatus('pending');
+
+    // Create temporary directory for this file's processing
+    const tempDir = path.join(__dirname, '../temp', file._id.toString());
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    // Download input file from GridFS to temporary location
+    tempInputPath = path.join(tempDir, file.originalName);
+    console.log(`Downloading input file from GridFS to: ${tempInputPath}`);
+    await downloadToLocal(file.gridfsInputFileId, tempInputPath);
+    console.log(`Input file downloaded successfully`);
+
+    let job;
+    let apiService;
+    let externalService;
+
+    // Route to appropriate API based on file type
+    if (file.fileType === 'pdf') {
+      console.log(`Sending PDF to external PDF API: ${file.originalName}`);
+      apiService = pdfApiService;
+      externalService = 'pdf';
+      job = await pdfApiService.startConversion(tempInputPath, {});
+    } else if (file.fileType === 'epub') {
+      console.log(`Sending EPUB to external EPUB API: ${file.originalName}`);
+      apiService = epubApiService;
+      externalService = 'epub';
+      job = await epubApiService.startConversion(tempInputPath, {});
+    } else {
+      throw new Error(`Unsupported file type: ${file.fileType}`);
+    }
+
+    // Store external job ID
+    file.externalJobId = job.job_id;
+    file.externalService = externalService;
+    await file.save();
+
+    console.log(`External job started: ${job.job_id} (${externalService})`);
+
+    // Update status to processing
+    await file.updateStatus('processing');
+
+    // Poll for completion
+    const completedJob = await apiService.pollJobUntil(
+      job.job_id,
+      apiService.ACTIONABLE_STATUSES || apiService.TERMINAL_STATUSES,
+      (statusUpdate) => {
+        console.log(`Job ${job.job_id} status: ${statusUpdate.status} (${statusUpdate.progress || 0}%)`);
+      }
+    );
+
+    // Map external status to internal status
+    const mappedStatus = apiService.mapStatusToFileStatus(completedJob.status);
+
+    if (completedJob.status === 'failed') {
+      throw new Error(completedJob.error || 'External conversion failed');
+    }
+
+    // Handle different final states
+    if (mappedStatus === 'ready_for_review') {
+      // PDF API: Job is ready for editor review
+      await file.updateStatus('ready_for_review', {
+        conversionMetadata: {
+          conversionType: externalService.toUpperCase(),
+          outputFormats: ['xml', 'docx', 'zip']
+        }
+      });
+      console.log(`File ${file._id} ready for review in editor`);
+
+    } else if (mappedStatus === 'completed') {
+      // Download output files from external API
+      const outputDir = path.join(tempDir, 'output');
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      let outputFiles = [];
+
+      if (externalService === 'pdf') {
+        // PDF API: List and download files
+        const filesResponse = await pdfApiService.listOutputFiles(job.job_id);
+        for (const outputFile of filesResponse.files || []) {
+          const localPath = path.join(outputDir, outputFile.name);
+          await pdfApiService.downloadFile(job.job_id, outputFile.name, localPath);
+          outputFiles.push({
+            filePath: localPath,
+            fileName: outputFile.name,
+            fileType: path.extname(outputFile.name).replace('.', ''),
+            fileSize: outputFile.size || fs.statSync(localPath).size
+          });
+        }
+      } else if (externalService === 'epub') {
+        // EPUB API: Download result ZIP
+        const zipPath = path.join(outputDir, `${path.basename(file.originalName, '.epub')}_output.zip`);
+        await epubApiService.downloadResult(job.job_id, zipPath);
+        const stats = fs.statSync(zipPath);
+        outputFiles.push({
+          filePath: zipPath,
+          fileName: path.basename(zipPath),
+          fileType: 'zip',
+          fileSize: stats.size
+        });
+      }
+
+      // Upload output files to GridFS
+      console.log(`Uploading ${outputFiles.length} output files to GridFS...`);
+      const gridfsFiles = await uploadMultipleToGridFS(
+        outputFiles,
+        {
+          sourceFileId: file._id,
+          uploadedBy: file.uploadedBy,
+          conversionType: externalService.toUpperCase()
+        }
+      );
+
+      // Map GridFS file info to output files array
+      const outputFilesWithGridFS = outputFiles.map((f, index) => ({
+        fileName: f.fileName,
+        filePath: null,
+        fileType: f.fileType,
+        fileSize: f.fileSize,
+        gridfsFileId: gridfsFiles[index].fileId,
+        storedInGridFS: true
+      }));
+
+      // Update file record with results
+      await file.updateStatus('completed', {
+        outputPath: null,
+        outputFiles: outputFilesWithGridFS,
+        conversionMetadata: {
+          conversionType: externalService.toUpperCase(),
+          outputFormats: outputFiles.map(f => f.fileType)
+        }
+      });
+
+      console.log(`File ${file._id} processed successfully via ${externalService} API`);
+
+      // Send success email notification
+      try {
+        const user = await User.findById(file.uploadedBy);
+        if (user && user.email) {
+          await sendConversionSuccessEmail(
+            user.email,
+            file.originalName,
+            outputFilesWithGridFS,
+            file._id
+          );
+          console.log(`Success email sent to ${user.email}`);
+        }
+      } catch (emailError) {
+        console.error('Failed to send success email:', emailError);
+      }
+
+      // Clean up temporary files
+      try {
+        await cleanupDirectory(tempDir);
+        console.log(`Cleaned up temporary directory: ${tempDir}`);
+      } catch (cleanupError) {
+        console.error('Error cleaning up temporary directory:', cleanupError);
+      }
+    }
+
+  } catch (error) {
+    console.error(`External API processing failed:`, error);
+
+    // Clean up temporary files
+    if (tempInputPath) {
+      try {
+        const tempDir = path.dirname(tempInputPath);
+        await cleanupDirectory(tempDir);
+      } catch (cleanupError) {
+        console.error('Error cleaning up after failure:', cleanupError);
+      }
+    }
+
+    // Update status to failed
+    if (file && file.updateStatus) {
+      try {
+        const errorMessage = error.message || 'External conversion failed';
+        await file.updateStatus('failed', {
+          errorMessage: errorMessage
+        });
+
+        // Send failure email
+        try {
+          const user = await User.findById(file.uploadedBy);
+          if (user && user.email) {
+            await sendConversionFailureEmail(user.email, file.originalName, errorMessage);
+            console.log(`Failure email sent to ${user.email}`);
+          }
+        } catch (emailError) {
+          console.error('Failed to send failure email:', emailError);
+        }
+      } catch (updateError) {
+        console.error('Failed to update file status:', updateError);
+      }
+    }
+  }
+};
+
+// @desc    Launch editor for a file (PDF API only)
+// @route   POST /api/files/:id/editor
+// @access  Private
+const launchEditor = async (req, res) => {
+  try {
+    const file = await File.findById(req.params.id);
+
+    if (!file) {
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+
+    // Check ownership
+    if (file.uploadedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    // Check if file is ready for review
+    if (file.status !== 'ready_for_review') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot launch editor. File status is '${file.status}', expected 'ready_for_review'`
+      });
+    }
+
+    let editorUrl;
+
+    if (file.externalService === 'pdf') {
+      const result = await pdfApiService.launchEditor(file.externalJobId);
+      editorUrl = result.editor_url;
+    } else if (file.externalService === 'epub') {
+      // EPUB uses separate editor service
+      // First need to get the output package path from job result
+      editorUrl = epubApiService.getEditorUrl();
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'Editor not available for this file type'
+      });
+    }
+
+    // Update file status
+    await file.updateStatus('editing', { editorUrl });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        editorUrl,
+        fileId: file._id,
+        externalJobId: file.externalJobId
+      }
+    });
+  } catch (error) {
+    console.error('Error launching editor:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error launching editor',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Finalize file without editing (PDF API only)
+// @route   POST /api/files/:id/finalize
+// @access  Private
+const finalizeFile = async (req, res) => {
+  try {
+    const file = await File.findById(req.params.id);
+
+    if (!file) {
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+
+    // Check ownership
+    if (file.uploadedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    // Check if file can be finalized
+    if (!['ready_for_review', 'editing'].includes(file.status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot finalize. File status is '${file.status}'`
+      });
+    }
+
+    if (file.externalService !== 'pdf') {
+      return res.status(400).json({
+        success: false,
+        message: 'Finalize only available for PDF files'
+      });
+    }
+
+    // Update status to finalizing
+    await file.updateStatus('finalizing');
+
+    // Call PDF API to finalize
+    await pdfApiService.finalizeJob(file.externalJobId);
+
+    // Poll for completion
+    const completedJob = await pdfApiService.pollJobUntil(
+      file.externalJobId,
+      pdfApiService.TERMINAL_STATUSES
+    );
+
+    if (completedJob.status === 'failed') {
+      throw new Error(completedJob.error || 'Finalization failed');
+    }
+
+    // Download and store output files (similar to processFileWithExternalApi)
+    const tempDir = path.join(__dirname, '../temp', file._id.toString());
+    const outputDir = path.join(tempDir, 'output');
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    const filesResponse = await pdfApiService.listOutputFiles(file.externalJobId);
+    const outputFiles = [];
+
+    for (const outputFile of filesResponse.files || []) {
+      const localPath = path.join(outputDir, outputFile.name);
+      await pdfApiService.downloadFile(file.externalJobId, outputFile.name, localPath);
+      outputFiles.push({
+        filePath: localPath,
+        fileName: outputFile.name,
+        fileType: path.extname(outputFile.name).replace('.', ''),
+        fileSize: outputFile.size || fs.statSync(localPath).size
+      });
+    }
+
+    // Upload to GridFS
+    const gridfsFiles = await uploadMultipleToGridFS(outputFiles, {
+      sourceFileId: file._id,
+      uploadedBy: file.uploadedBy,
+      conversionType: 'PDF'
+    });
+
+    const outputFilesWithGridFS = outputFiles.map((f, index) => ({
+      fileName: f.fileName,
+      filePath: null,
+      fileType: f.fileType,
+      fileSize: f.fileSize,
+      gridfsFileId: gridfsFiles[index].fileId,
+      storedInGridFS: true
+    }));
+
+    // Update file status
+    await file.updateStatus('completed', {
+      outputFiles: outputFilesWithGridFS,
+      editorUrl: null
+    });
+
+    // Clean up temp files
+    try {
+      await cleanupDirectory(tempDir);
+    } catch (e) {
+      console.error('Cleanup error:', e);
+    }
+
+    // Send success email
+    try {
+      const user = await User.findById(file.uploadedBy);
+      if (user && user.email) {
+        await sendConversionSuccessEmail(user.email, file.originalName, outputFilesWithGridFS, file._id);
+      }
+    } catch (emailError) {
+      console.error('Email error:', emailError);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'File finalized successfully',
+      data: { file: await File.findById(file._id).populate('uploadedBy', 'username email') }
+    });
+
+  } catch (error) {
+    console.error('Error finalizing file:', error);
+
+    // Update status to failed
+    if (req.params.id) {
+      try {
+        await File.findByIdAndUpdate(req.params.id, {
+          status: 'failed',
+          errorMessage: error.message
+        });
+      } catch (e) {
+        console.error('Failed to update status:', e);
+      }
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Error finalizing file',
+      error: error.message
+    });
   }
 };
 
@@ -486,5 +910,8 @@ module.exports = {
   getFileById,
   downloadOutputFile,
   deleteFile,
-  getConversionDashboardFiles
+  getConversionDashboardFiles,
+  // New external API endpoints
+  launchEditor,
+  finalizeFile
 };
