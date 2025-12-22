@@ -1,55 +1,82 @@
 version: "3.9"
 
+# =============================================================================
+# Manuscript Processor - Docker Compose Configuration
+# =============================================================================
+# Supports two modes:
+#   1. Development (default): Uses local MongoDB container + mock APIs
+#   2. Production: Uses external MongoDB (Atlas/DocumentDB) + real APIs
+# =============================================================================
+
 services:
+  # ===========================================================================
+  # MongoDB (Development Only)
+  # ===========================================================================
+  # Comment out or remove this service when using external MongoDB
   mongo:
     image: mongo:5.0
     container_name: manuscript-mongo
     restart: unless-stopped
+    profiles:
+      - dev
+      - default
     environment:
       MONGO_INITDB_DATABASE: manuscript-processor
-    # NOTE: remove or restrict this port in production to avoid exposing Mongo publicly
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # ===========================================================================
+  # Backend API
+  # ===========================================================================
   backend:
     build:
       context: ./backend
+      dockerfile: Dockerfile
     container_name: manuscript-backend
     restart: unless-stopped
     env_file:
       - ./backend/.env
     environment:
-      # Use docker service name for internal mongo access
-      MONGODB_URI: mongodb://mongo:27017/manuscript-processor
+      # MongoDB: Use external if MONGODB_URI is set, otherwise use local container
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/manuscript-processor}
       PORT: 5000
-      # must match the URL your browser will use to reach the frontend
+      NODE_ENV: ${NODE_ENV:-development}
+      # Frontend URL for CORS
       FRONTEND_URL: http://${HOST_IP:-localhost}:3000
-      # External API configuration (uses docker service names)
+      # External API configuration
       USE_EXTERNAL_APIS: ${USE_EXTERNAL_APIS:-true}
-      PDF_API_URL: http://pdf-api:8000
-      EPUB_API_URL: http://epub-api:5001
-      EPUB_EDITOR_URL: http://epub-api:5000
+      PDF_API_URL: ${PDF_API_URL:-http://pdf-api:8000}
+      EPUB_API_URL: ${EPUB_API_URL:-http://epub-api:5001}
+      EPUB_EDITOR_URL: ${EPUB_EDITOR_URL:-http://epub-api:5000}
     depends_on:
-      - mongo
-      - pdf-api
-      - epub-api
+      mongo:
+        condition: service_healthy
+        required: false
     ports:
       - "5000:5000"
     volumes:
       - ./backend/uploads:/usr/src/app/uploads
       - ./backend/outputs:/usr/src/app/outputs
 
+  # ===========================================================================
+  # Frontend (React/Vite)
+  # ===========================================================================
   frontend:
     build:
       context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://${HOST_IP:-localhost}:5000/api
     container_name: manuscript-frontend
     restart: unless-stopped
-    env_file:
-      - ./frontend/.env
     environment:
-      # Browser-facing API URL — browser will call this hostname/ip
       VITE_API_URL: http://${HOST_IP:-localhost}:5000/api
     depends_on:
       - backend
@@ -57,49 +84,106 @@ services:
       - "3000:3000"
     command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
 
-  # ===============================
-  # External API Services (Mocks for Development)
-  # ===============================
-  # In production, replace these with your actual PDF/EPUB processing services
-  # or configure backend to point to external service URLs
-
+  # ===========================================================================
+  # PDF Processing API (Mock for Development)
+  # ===========================================================================
+  # In production, set PDF_API_URL to your actual PDF service
   pdf-api:
     build:
       context: ./mocks/pdf-api
     container_name: manuscript-pdf-api
     restart: unless-stopped
+    profiles:
+      - dev
+      - default
     environment:
       PORT: 8000
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/manuscript-processor}
     ports:
       - "8000:8000"
 
+  # ===========================================================================
+  # EPUB Processing API (Mock for Development)
+  # ===========================================================================
+  # In production, set EPUB_API_URL to your actual EPUB service
   epub-api:
     build:
       context: ./mocks/epub-api
     container_name: manuscript-epub-api
     restart: unless-stopped
+    profiles:
+      - dev
+      - default
     environment:
       PORT: 5001
       EDITOR_PORT: 5000
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongo:27017/manuscript-processor}
     ports:
       - "5001:5001"
 
 volumes:
   mongo-data:
 
-# ===============================
-# Usage Instructions
-# ===============================
-# Development (with mock services):
-#   docker-compose up --build
+# =============================================================================
+# USAGE INSTRUCTIONS
+# =============================================================================
 #
-# Production (with real external APIs):
-#   1. Remove or comment out pdf-api and epub-api services
-#   2. Set environment variables:
-#      - PDF_API_URL=https://your-pdf-api.example.com
-#      - EPUB_API_URL=https://your-epub-api.example.com
-#      - EPUB_EDITOR_URL=https://your-epub-editor.example.com
-#   3. docker-compose up --build
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │ DEVELOPMENT (Local MongoDB + Mock APIs)                                  │
+# ├─────────────────────────────────────────────────────────────────────────┤
+# │                                                                          │
+# │   docker-compose up --build                                              │
+# │                                                                          │
+# │   This starts: MongoDB, Backend, Frontend, PDF Mock, EPUB Mock           │
+# │   Access: http://localhost:3000                                          │
+# │                                                                          │
+# └─────────────────────────────────────────────────────────────────────────┘
 #
-# Set HOST_IP for non-localhost deployments:
-#   HOST_IP=your-server-ip docker-compose up --build
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │ PRODUCTION (External MongoDB + Real APIs)                                │
+# ├─────────────────────────────────────────────────────────────────────────┤
+# │                                                                          │
+# │   # Create .env file or export variables:                                │
+# │   export MONGODB_URI="mongodb+srv://user:pass@cluster.mongodb.net/db"    │
+# │   export PDF_API_URL="https://pdf-api.yourcompany.com"                   │
+# │   export EPUB_API_URL="https://epub-api.yourcompany.com"                 │
+# │   export HOST_IP="your-server-ip-or-domain"                              │
+# │                                                                          │
+# │   # Run without dev services (no local mongo, no mocks):                 │
+# │   docker-compose --profile prod up --build                               │
+# │                                                                          │
+# │   # Or just backend + frontend (APIs are external):                      │
+# │   docker-compose up backend frontend --build                             │
+# │                                                                          │
+# └─────────────────────────────────────────────────────────────────────────┘
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │ SHARED MONGODB (All services use same external DB)                       │
+# ├─────────────────────────────────────────────────────────────────────────┤
+# │                                                                          │
+# │   All services (demo-ui, pdf-api, epub-api) should use the same          │
+# │   MONGODB_URI connection string:                                         │
+# │                                                                          │
+# │   MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/manuscript     │
+# │                                                                          │
+# │   This allows:                                                           │
+# │   - Shared user authentication                                           │
+# │   - Shared job tracking                                                  │
+# │   - Shared configuration                                                 │
+# │   - Cross-service data access                                            │
+# │                                                                          │
+# └─────────────────────────────────────────────────────────────────────────┘
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │ ENVIRONMENT VARIABLES                                                    │
+# ├─────────────────────────────────────────────────────────────────────────┤
+# │                                                                          │
+# │   MONGODB_URI      - MongoDB connection string (Atlas/DocumentDB/local)  │
+# │   HOST_IP          - Server IP or domain (default: localhost)            │
+# │   NODE_ENV         - development | production                            │
+# │   USE_EXTERNAL_APIS- true | false                                        │
+# │   PDF_API_URL      - URL to PDF processing service                       │
+# │   EPUB_API_URL     - URL to EPUB processing service                      │
+# │   EPUB_EDITOR_URL  - URL to EPUB editor service                          │
+# │                                                                          │
+# └─────────────────────────────────────────────────────────────────────────┘
