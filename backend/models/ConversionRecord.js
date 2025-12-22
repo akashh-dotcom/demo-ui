@@ -339,4 +339,4 @@ conversionRecordSchema.statics.getDailyStats = async function(days = 30) {
   ]);
 };
 
-module.exports = mongoose.model('ConversionRecord', conversionRecordSchema);
+module.exports = mongoose.model('ConversionRecord', conversionRecordSchema, 'conversion_dashboard');
