@@ -3510,6 +3510,12 @@ def main():
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
+    # Silence chatty third-party loggers
+    logging.getLogger("pymongo").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("botocore").setLevel(logging.WARNING)
+    logging.getLogger("s3transfer").setLevel(logging.WARNING)
+
     logger.info("=" * 70)
     logger.info("HEURISTICS PROCESSING")
     logger.info("=" * 70)
