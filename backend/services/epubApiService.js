@@ -17,7 +17,10 @@ const path = require('path');
 
 // Configuration from environment
 const EPUB_API_URL = process.env.EPUB_API_URL || 'http://localhost:5001';
+// Internal URL for backend-to-editor API calls (Docker internal hostname)
 const EPUB_EDITOR_URL = process.env.EPUB_EDITOR_URL || 'http://localhost:5000';
+// Public URL for browser access (must be accessible from user's browser)
+const EPUB_EDITOR_PUBLIC_URL = process.env.EPUB_EDITOR_PUBLIC_URL || EPUB_EDITOR_URL;
 const EPUB_API_TIMEOUT = parseInt(process.env.EPUB_API_TIMEOUT) || 30000;
 const EPUB_POLL_INTERVAL = parseInt(process.env.EPUB_POLL_INTERVAL) || 2000;
 
@@ -387,10 +390,11 @@ async function savePackage() {
 }
 
 /**
- * Get the editor URL for embedding or opening
+ * Get the editor URL for embedding or opening in browser
+ * Returns the public URL that browsers can access (not Docker internal hostname)
  */
 function getEditorUrl() {
-  return EPUB_EDITOR_URL;
+  return EPUB_EDITOR_PUBLIC_URL;
 }
 
 // ============================================
@@ -531,6 +535,7 @@ module.exports = {
   // Constants
   EPUB_API_URL,
   EPUB_EDITOR_URL,
+  EPUB_EDITOR_PUBLIC_URL,
   JobStatus,
   TERMINAL_STATUSES,
 
