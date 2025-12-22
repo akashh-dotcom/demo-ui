@@ -1,0 +1,223 @@
+version: "3.9"
+
+# =============================================================================
+# Master Docker Compose - All Services
+# =============================================================================
+# Runs all 3 projects together for local development:
+#   - demo-ui (Backend + Frontend)
+#   - PDFtoXMLUsingExcel (PDF Converter API)
+#   - RittDocConverter (EPUB Converter + Editor)
+#
+# Directory Structure Required:
+#   /your-projects-folder/
+#   ├── demo-ui/                  (this repo)
+#   ├── PDFtoXMLUsingExcel/       (PDF converter repo)
+#   └── RittDocConverter/         (EPUB converter repo)
+#
+# Usage:
+#   cd demo-ui
+#   docker-compose -f docker-compose.master.yaml up --build
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # MongoDB (Local Development)
+  # ===========================================================================
+  # Remove this if using MongoDB Atlas - set MONGODB_URI in .env instead
+  mongodb:
+    image: mongo:6.0
+    container_name: ritt-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - ritt-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===========================================================================
+  # Demo-UI Backend
+  # ===========================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ritt-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 5000
+      # Use external MongoDB Atlas or local container
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/RittenhouseXMLConverter}
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-in-production}
+      FRONTEND_URL: http://localhost:3000
+      # Connect to real pipeline services (not mocks)
+      USE_EXTERNAL_APIS: "true"
+      PDF_API_URL: http://pdf-api:8000
+      EPUB_API_URL: http://epub-api:5001
+      EPUB_EDITOR_URL: http://epub-editor:5000
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/uploads:/usr/src/app/uploads
+      - ./backend/outputs:/usr/src/app/outputs
+    networks:
+      - ritt-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+        required: false
+      pdf-api:
+        condition: service_started
+      epub-api:
+        condition: service_started
+
+  # ===========================================================================
+  # Demo-UI Frontend
+  # ===========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ritt-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:5000/api
+    ports:
+      - "3000:3000"
+    networks:
+      - ritt-network
+    depends_on:
+      - backend
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+
+  # ===========================================================================
+  # PDF Converter API (PDFtoXMLUsingExcel)
+  # ===========================================================================
+  pdf-api:
+    build:
+      context: ../PDFtoXMLUsingExcel
+      dockerfile: Dockerfile
+    container_name: ritt-pdf-api
+    restart: unless-stopped
+    environment:
+      PORT: 8000
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/RittenhouseXMLConverter}
+    ports:
+      - "8000:8000"
+    volumes:
+      - pdf-uploads:/app/uploads
+      - pdf-outputs:/app/outputs
+    networks:
+      - ritt-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+        required: false
+
+  # ===========================================================================
+  # EPUB Converter API (RittDocConverter)
+  # ===========================================================================
+  epub-api:
+    build:
+      context: ../RittDocConverter
+      dockerfile: Dockerfile
+    container_name: ritt-epub-api
+    restart: unless-stopped
+    environment:
+      PORT: 5001
+      MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/RittenhouseXMLConverter}
+    ports:
+      - "5001:5001"
+    volumes:
+      - epub-uploads:/app/uploads
+      - epub-outputs:/app/outputs
+    networks:
+      - ritt-network
+    depends_on:
+      mongodb:
+        condition: service_healthy
+        required: false
+
+  # ===========================================================================
+  # EPUB Editor (RittDocConverter/editor)
+  # ===========================================================================
+  epub-editor:
+    build:
+      context: ../RittDocConverter/editor
+      dockerfile: Dockerfile
+    container_name: ritt-epub-editor
+    restart: unless-stopped
+    environment:
+      PORT: 5000
+    ports:
+      - "5002:5000"  # Map to 5002 to avoid conflict with backend
+    networks:
+      - ritt-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  ritt-network:
+    driver: bridge
+    name: ritt-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  mongodb-data:
+    name: ritt-mongodb-data
+  pdf-uploads:
+    name: ritt-pdf-uploads
+  pdf-outputs:
+    name: ritt-pdf-outputs
+  epub-uploads:
+    name: ritt-epub-uploads
+  epub-outputs:
+    name: ritt-epub-outputs
+
+# =============================================================================
+# USAGE INSTRUCTIONS
+# =============================================================================
+#
+# 1. Clone all 3 repos into the same parent directory:
+#
+#    mkdir ~/ritt-projects && cd ~/ritt-projects
+#    git clone https://github.com/YOUR_ORG/demo-ui.git
+#    git clone https://github.com/YOUR_ORG/PDFtoXMLUsingExcel.git
+#    git clone https://github.com/YOUR_ORG/RittDocConverter.git
+#
+# 2. Create .env file in demo-ui/:
+#
+#    cd demo-ui
+#    cp .env.example .env
+#    # Edit .env with your MongoDB URI and secrets
+#
+# 3. Start all services:
+#
+#    docker-compose -f docker-compose.master.yaml up --build
+#
+# 4. Access the application:
+#
+#    - Frontend:    http://localhost:3000
+#    - Backend API: http://localhost:5000/api
+#    - PDF API:     http://localhost:8000
+#    - EPUB API:    http://localhost:5001
+#    - EPUB Editor: http://localhost:5002
+#
+# 5. Using MongoDB Atlas instead of local:
+#
+#    Set MONGODB_URI in .env:
+#    MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/RittenhouseXMLConverter
+#
+#    Then start without the mongodb service:
+#    docker-compose -f docker-compose.master.yaml up backend frontend pdf-api epub-api epub-editor --build
+#
+# =============================================================================
