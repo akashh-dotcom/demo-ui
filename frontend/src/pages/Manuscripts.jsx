@@ -590,10 +590,10 @@ export const Manuscripts = () => {
                           </div>
                           <p className="text-sm text-gray-600 mb-4">
                             {manuscript.status === 'ready_for_review'
-                              ? 'Your document is ready for review. Click "Open Editor" to make changes, then finalize when done.'
+                              ? 'Your document is ready for review. Click "Open Editor" to make changes. After saving in the editor, click "Finalize Document" to generate the final output files.'
                               : manuscript.status === 'editing'
-                              ? 'Your document is currently being edited. You can continue editing or finalize the document.'
-                              : 'Need to make changes? Open the editor to modify the document and reprocess to generate updated output files.'}
+                              ? 'Your document is being edited. After saving your changes in the editor, click "Finalize Document" to complete and download.'
+                              : 'Need to make changes? Open the editor, make your edits, save them, then click "Finalize Document" to regenerate the output files.'}
                           </p>
                           <div className="flex flex-col sm:flex-row gap-3">
                             {/* Launch Editor Button */}
