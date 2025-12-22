@@ -11,6 +11,7 @@
  */
 
 const FormData = require('form-data');
+const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
@@ -140,29 +141,36 @@ async function updateConfig(config) {
  * @returns {Object} Job object with job_id
  */
 async function startConversion(filePath, config = {}) {
-  const FormData = (await import('form-data')).default;
   const formData = new FormData();
 
   // Add the file
-  formData.append('file', fs.createReadStream(filePath));
+  formData.append('file', fs.createReadStream(filePath), {
+    filename: path.basename(filePath),
+    contentType: 'application/epub+zip'
+  });
 
   // Add configuration options if any
   Object.entries(config).forEach(([key, value]) => {
     formData.append(key, String(value));
   });
 
-  const response = await fetch(`${EPUB_API_URL}/api/v1/convert`, {
-    method: 'POST',
-    body: formData,
-    headers: formData.getHeaders()
-  });
+  try {
+    const response = await axios.post(`${EPUB_API_URL}/api/v1/convert`, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      timeout: EPUB_API_TIMEOUT,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`EPUB conversion failed: ${errorText}`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(`EPUB conversion failed: ${JSON.stringify(error.response.data)}`);
+    }
+    throw new Error(`EPUB conversion failed: ${error.message}`);
   }
-
-  return await response.json();
 }
 
 /**
@@ -173,12 +181,14 @@ async function startConversion(filePath, config = {}) {
  * @returns {Object} Batch job info
  */
 async function startBatchConversion(filePaths, config = {}) {
-  const FormData = (await import('form-data')).default;
   const formData = new FormData();
 
   // Add all files
-  filePaths.forEach((filePath, index) => {
-    formData.append('files', fs.createReadStream(filePath));
+  filePaths.forEach((filePath) => {
+    formData.append('files', fs.createReadStream(filePath), {
+      filename: path.basename(filePath),
+      contentType: 'application/epub+zip'
+    });
   });
 
   // Add configuration
@@ -186,18 +196,23 @@ async function startBatchConversion(filePaths, config = {}) {
     formData.append(key, String(value));
   });
 
-  const response = await fetch(`${EPUB_API_URL}/api/v1/convert/batch`, {
-    method: 'POST',
-    body: formData,
-    headers: formData.getHeaders()
-  });
+  try {
+    const response = await axios.post(`${EPUB_API_URL}/api/v1/convert/batch`, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      timeout: EPUB_API_TIMEOUT * 5, // Longer timeout for batch
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`EPUB batch conversion failed: ${errorText}`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(`EPUB batch conversion failed: ${JSON.stringify(error.response.data)}`);
+    }
+    throw new Error(`EPUB batch conversion failed: ${error.message}`);
   }
-
-  return await response.json();
 }
 
 /**
