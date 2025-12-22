@@ -9,6 +9,7 @@
  */
 
 const FormData = require('form-data');
+const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
 
@@ -122,11 +123,13 @@ async function getConfigOptions() {
  * @returns {Object} Job object with job_id
  */
 async function startConversion(filePath, config = {}) {
-  const FormData = (await import('form-data')).default;
   const formData = new FormData();
 
   // Add the file
-  formData.append('file', fs.createReadStream(filePath));
+  formData.append('file', fs.createReadStream(filePath), {
+    filename: path.basename(filePath),
+    contentType: 'application/pdf'
+  });
 
   // Add configuration options
   const defaultConfig = {
@@ -148,18 +151,23 @@ async function startConversion(filePath, config = {}) {
     formData.append(key, String(value));
   });
 
-  const response = await fetch(`${PDF_API_URL}/api/v1/convert`, {
-    method: 'POST',
-    body: formData,
-    headers: formData.getHeaders()
-  });
+  try {
+    const response = await axios.post(`${PDF_API_URL}/api/v1/convert`, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      timeout: PDF_API_TIMEOUT,
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`PDF conversion failed: ${errorText}`);
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(`PDF conversion failed: ${JSON.stringify(error.response.data)}`);
+    }
+    throw new Error(`PDF conversion failed: ${error.message}`);
   }
-
-  return await response.json();
 }
 
 /**
