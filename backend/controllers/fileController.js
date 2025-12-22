@@ -40,7 +40,13 @@ const uploadFile = async (req, res) => {
     const fileType = path.extname(originalname).toLowerCase().replace('.', '');
     tempFilePath = filePath;
 
+    // Get optional output folder path from request body
+    const outputFolderPath = req.body.outputFolderPath || null;
+
     console.log(`Uploading file to GridFS: ${originalname}`);
+    if (outputFolderPath) {
+      console.log(`Output folder path specified: ${outputFolderPath}`);
+    }
 
     // Upload file to GridFS
     const gridfsResult = await uploadFileToGridFS(req.file, {
@@ -61,6 +67,7 @@ const uploadFile = async (req, res) => {
       fileSize: size,
       mimeType: mimetype,
       uploadedBy: req.user._id,
+      outputFolderPath: outputFolderPath,  // Store user's output folder preference
       status: 'uploaded'
     });
 
@@ -1112,23 +1119,85 @@ const getConversionStats = async (req, res) => {
   }
 };
 
+// Helper function to save files to user's output folder
+const saveToOutputFolder = async (file, outputFiles, isbn) => {
+  if (!file.outputFolderPath) return outputFiles;
+
+  // Create ISBN subfolder
+  const isbnFolder = isbn || 'unknown';
+  const targetDir = path.join(file.outputFolderPath, isbnFolder);
+
+  try {
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true });
+    }
+
+    // Copy each output file to the target directory
+    for (const outputFile of outputFiles) {
+      if (outputFile.filePath && fs.existsSync(outputFile.filePath)) {
+        const targetPath = path.join(targetDir, outputFile.fileName);
+        fs.copyFileSync(outputFile.filePath, targetPath);
+        outputFile.localPath = targetPath;
+        console.log(`Saved ${outputFile.fileName} to ${targetPath}`);
+      }
+    }
+  } catch (err) {
+    console.error('Error saving to output folder:', err);
+    // Don't fail the whole process if saving to output folder fails
+  }
+
+  return outputFiles;
+};
+
 // @desc    Webhook for external editors to push completed packages
 // @route   POST /api/files/webhook/complete
 // @access  Internal (from PDF/EPUB editors)
 const webhookComplete = async (req, res) => {
   try {
-    const { jobId, status, fileType, metadata } = req.body;
+    const {
+      jobId,
+      status,
+      fileType,
+      metadata,
+      // New fields from PDF API webhook payload
+      filename,
+      apiBaseUrl,
+      links,
+      outputFiles: webhookOutputFiles,
+      outputPackage,
+      error: webhookError,
+      // EPUB-specific fields
+      downloadUrls  // { package: "...", report: "...", info: "..." }
+    } = req.body;
 
     if (!jobId) {
       return res.status(400).json({ success: false, message: 'Missing jobId' });
     }
 
     console.log(`Webhook received: jobId=${jobId}, status=${status}, fileType=${fileType}`);
+    if (links) {
+      console.log(`Links provided: ${JSON.stringify(links)}`);
+    }
 
     // Find file by external job ID
     const file = await File.findOne({ externalJobId: jobId });
     if (!file) {
       return res.status(404).json({ success: false, message: 'File not found for jobId: ' + jobId });
+    }
+
+    // Store external API info and links
+    if (apiBaseUrl) {
+      file.externalApiBaseUrl = apiBaseUrl;
+    }
+    if (links) {
+      file.externalLinks = {
+        job: links.job,
+        files: links.files,
+        rittdocPackage: links.rittdocPackage,
+        wordDocument: links.wordDocument,
+        validationReport: links.validationReport,
+        docbookXml: links.docbookXml
+      };
     }
 
     // If status is 'completed' or 'saved', download the output and finalize
@@ -1140,43 +1209,146 @@ const webhookComplete = async (req, res) => {
       }
 
       let outputFiles = [];
+      let isbn = metadata?.isbn || file.conversionMetadata?.isbn;
 
       if (file.externalService === 'pdf') {
-        // Download output files from PDF API
-        const filesResponse = await pdfApiService.listOutputFiles(jobId);
-        for (const outputFile of filesResponse.files || []) {
-          const localPath = path.join(outputDir, outputFile.name);
-          const localDir = path.dirname(localPath);
-          if (!fs.existsSync(localDir)) {
-            fs.mkdirSync(localDir, { recursive: true });
+        // Use the outputFiles from webhook if provided, otherwise list from API
+        const filesToDownload = webhookOutputFiles || [];
+
+        if (filesToDownload.length > 0) {
+          // Download files using URLs from webhook payload
+          for (const outputFile of filesToDownload) {
+            const localPath = path.join(outputDir, outputFile.name);
+            const localDir = path.dirname(localPath);
+            if (!fs.existsSync(localDir)) {
+              fs.mkdirSync(localDir, { recursive: true });
+            }
+
+            // Download from the provided URL or construct from API
+            if (outputFile.downloadUrl) {
+              // Download directly from provided URL
+              const response = await fetch(outputFile.downloadUrl);
+              if (response.ok) {
+                const buffer = await response.arrayBuffer();
+                fs.writeFileSync(localPath, Buffer.from(buffer));
+              } else {
+                console.error(`Failed to download ${outputFile.name}: ${response.status}`);
+                continue;
+              }
+            } else {
+              // Fall back to API download
+              await pdfApiService.downloadFile(jobId, outputFile.name, localPath);
+            }
+
+            const stats = fs.statSync(localPath);
+            outputFiles.push({
+              filePath: localPath,
+              fileName: outputFile.name,
+              fileType: path.extname(outputFile.name).replace('.', ''),
+              fileSize: stats.size,
+              downloadType: outputFile.type || null  // e.g., 'rittdoc_package', 'validation_report'
+            });
           }
-          await pdfApiService.downloadFile(jobId, outputFile.name, localPath);
-          outputFiles.push({
-            filePath: localPath,
-            fileName: outputFile.name,
-            fileType: path.extname(outputFile.name).replace('.', ''),
-            fileSize: outputFile.size || fs.statSync(localPath).size
-          });
+        } else {
+          // Fall back to listing files from API
+          const filesResponse = await pdfApiService.listOutputFiles(jobId);
+          for (const outputFile of filesResponse.files || []) {
+            const localPath = path.join(outputDir, outputFile.name);
+            const localDir = path.dirname(localPath);
+            if (!fs.existsSync(localDir)) {
+              fs.mkdirSync(localDir, { recursive: true });
+            }
+            await pdfApiService.downloadFile(jobId, outputFile.name, localPath);
+
+            // Determine download type based on filename
+            let downloadType = null;
+            if (outputFile.name.includes('_rittdoc.zip')) downloadType = 'rittdoc_package';
+            else if (outputFile.name.endsWith('.docx')) downloadType = 'word_document';
+            else if (outputFile.name.includes('_validation_report.xlsx')) downloadType = 'validation_report';
+            else if (outputFile.name.includes('_docbook42.xml')) downloadType = 'docbook_xml';
+
+            outputFiles.push({
+              filePath: localPath,
+              fileName: outputFile.name,
+              fileType: path.extname(outputFile.name).replace('.', ''),
+              fileSize: outputFile.size || fs.statSync(localPath).size,
+              downloadType: downloadType
+            });
+          }
         }
       } else if (file.externalService === 'epub') {
-        // Download result ZIP from EPUB API
+        // Download result ZIP and validation report from EPUB API
         let zipFileName;
-        const isbn = metadata?.isbn || file.conversionMetadata?.isbn;
         if (isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)) {
           zipFileName = `${isbn.replace(/-/g, '')}.zip`;
         } else {
           zipFileName = `${path.basename(file.originalName, '.epub')}_output.zip`;
         }
         const zipPath = path.join(outputDir, zipFileName);
-        await epubApiService.downloadResult(jobId, zipPath);
-        const stats = fs.statSync(zipPath);
+
+        // Download package - use downloadUrls if provided, otherwise fallback to epubApiService
+        if (downloadUrls?.package) {
+          console.log(`Downloading EPUB package from: ${downloadUrls.package}`);
+          const response = await fetch(downloadUrls.package);
+          if (response.ok) {
+            const buffer = await response.arrayBuffer();
+            fs.writeFileSync(zipPath, Buffer.from(buffer));
+          } else {
+            console.error(`Failed to download package: ${response.status}`);
+            throw new Error(`Failed to download EPUB package: ${response.status}`);
+          }
+        } else {
+          await epubApiService.downloadResult(jobId, zipPath);
+        }
+
+        const zipStats = fs.statSync(zipPath);
         outputFiles.push({
           filePath: zipPath,
           fileName: path.basename(zipPath),
           fileType: 'zip',
-          fileSize: stats.size
+          fileSize: zipStats.size,
+          downloadType: 'rittdoc_package'
         });
+
+        // Download validation report if URL provided
+        if (downloadUrls?.report) {
+          const reportFileName = isbn && isbn !== 'UNKNOWN'
+            ? `${isbn.replace(/-/g, '')}_validation_report.xlsx`
+            : `${path.basename(file.originalName, '.epub')}_validation_report.xlsx`;
+          const reportPath = path.join(outputDir, reportFileName);
+
+          console.log(`Downloading EPUB validation report from: ${downloadUrls.report}`);
+          const reportResponse = await fetch(downloadUrls.report);
+          if (reportResponse.ok) {
+            const buffer = await reportResponse.arrayBuffer();
+            fs.writeFileSync(reportPath, Buffer.from(buffer));
+            const reportStats = fs.statSync(reportPath);
+            outputFiles.push({
+              filePath: reportPath,
+              fileName: reportFileName,
+              fileType: 'xlsx',
+              fileSize: reportStats.size,
+              downloadType: 'validation_report'
+            });
+          } else {
+            console.error(`Failed to download validation report: ${reportResponse.status}`);
+            // Don't fail the whole process if validation report download fails
+          }
+        }
+
+        // Store EPUB-specific links
+        if (downloadUrls) {
+          file.externalLinks = {
+            ...file.externalLinks,
+            rittdocPackage: downloadUrls.package,
+            validationReport: downloadUrls.report,
+            info: downloadUrls.info
+          };
+        }
       }
+
+      // Save to user's output folder if specified
+      outputFiles = await saveToOutputFolder(file, outputFiles, isbn);
 
       // Upload to GridFS
       const gridfsFiles = await uploadMultipleToGridFS(outputFiles, {
@@ -1190,24 +1362,32 @@ const webhookComplete = async (req, res) => {
         filePath: null,
         fileType: f.fileType,
         fileSize: f.fileSize,
+        downloadType: f.downloadType,
         gridfsFileId: gridfsFiles[index].fileId,
-        storedInGridFS: true
+        storedInGridFS: true,
+        localPath: f.localPath || null
       }));
 
       // Update file status to completed
       await file.updateStatus('completed', {
         outputFiles: outputFilesWithGridFS,
         editorUrl: null,
+        externalApiBaseUrl: apiBaseUrl || file.externalApiBaseUrl,
+        externalLinks: file.externalLinks,
         conversionMetadata: {
           ...file.conversionMetadata,
-          ...metadata
+          ...metadata,
+          isbn: isbn
         }
       });
 
       // Record completion in tracking database
       try {
         await ConversionRecord.recordComplete(file._id, outputFilesWithGridFS, {
-          isbn: metadata?.isbn || file.conversionMetadata?.isbn
+          isbn: isbn,
+          title: metadata?.title,
+          author: metadata?.author,
+          publisher: metadata?.publisher
         });
       } catch (trackingError) {
         console.error('Failed to record completion:', trackingError);
@@ -1232,11 +1412,17 @@ const webhookComplete = async (req, res) => {
 
       console.log(`File ${file._id} completed via webhook`);
     } else if (status === 'failed') {
+      const errorMessage = webhookError || metadata?.error || 'Processing failed';
       await file.updateStatus('failed', {
-        errorMessage: metadata?.error || 'Processing failed'
+        errorMessage: errorMessage,
+        externalApiBaseUrl: apiBaseUrl,
+        externalLinks: links ? {
+          job: links.job,
+          files: links.files
+        } : file.externalLinks
       });
       try {
-        await ConversionRecord.recordFailure(file._id, metadata?.error || 'Processing failed');
+        await ConversionRecord.recordFailure(file._id, errorMessage);
       } catch (e) {
         console.error('Failed to record failure:', e);
       }

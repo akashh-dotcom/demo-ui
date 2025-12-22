@@ -34,6 +34,11 @@ const fileSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // User-specified output folder path for saving converted files locally
+  outputFolderPath: {
+    type: String,
+    required: false  // Optional: user can specify where to save output files
+  },
   // External API integration fields
   externalJobId: {
     type: String,
@@ -44,6 +49,19 @@ const fileSchema = new mongoose.Schema({
     type: String,
     enum: ['pdf', 'epub', 'local'],  // 'local' for legacy backward compatibility
     default: 'local'
+  },
+  // External API URLs for accessing output files
+  externalApiBaseUrl: {
+    type: String,
+    required: false  // Base URL of the external API for downloading files
+  },
+  externalLinks: {
+    job: String,
+    files: String,
+    rittdocPackage: String,
+    wordDocument: String,
+    validationReport: String,
+    docbookXml: String
   },
   editorUrl: {
     type: String,
@@ -82,11 +100,13 @@ const fileSchema = new mongoose.Schema({
     filePath: String,  // Deprecated - kept for backward compatibility
     fileType: String,
     fileSize: Number,
+    downloadType: String,  // e.g., 'rittdoc_package', 'word_document', 'validation_report', 'docbook_xml'
     gridfsFileId: mongoose.Schema.Types.ObjectId,  // GridFS file reference
     storedInGridFS: {
       type: Boolean,
       default: false
-    }
+    },
+    localPath: String  // Path to locally saved file in user's output folder
   }],
   errorMessage: {
     type: String
@@ -94,7 +114,11 @@ const fileSchema = new mongoose.Schema({
   conversionMetadata: {
     conversionType: String,
     outputFormats: [String],
-    processingTime: Number
+    processingTime: Number,
+    isbn: String,
+    title: String,
+    author: String,
+    publisher: String
   }
 }, {
   timestamps: true

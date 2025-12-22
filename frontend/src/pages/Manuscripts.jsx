@@ -21,7 +21,10 @@ import {
   Edit3,
   Play,
   ExternalLink,
-  Loader2
+  Loader2,
+  FolderOpen,
+  FileSpreadsheet,
+  X
 } from 'lucide-react';
 import { launchEditor, finalizeFile } from '../utils/api';
 
@@ -38,6 +41,8 @@ export const Manuscripts = () => {
   const [expandedFile, setExpandedFile] = useState(null);
   const [editorLoading, setEditorLoading] = useState(null);
   const [finalizingFile, setFinalizingFile] = useState(null);
+  const [outputFolderPath, setOutputFolderPath] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
   const hasLoadedInitially = useRef(false);
 
   // Initial load - ONLY ONCE
@@ -60,32 +65,46 @@ export const Manuscripts = () => {
     }
   };
 
-  const handleFileSelect = async (file) => {
+  const handleFileSelect = (file) => {
+    setSelectedFile(file);
+  };
+
+  const handleUploadConfirm = async () => {
+    if (!selectedFile) return;
+
     setUploading(true);
     try {
-      console.log('📤 Starting file upload:', file.name);
-      const result = await uploadManuscript(file);
-      
+      console.log('📤 Starting file upload:', selectedFile.name);
+      if (outputFolderPath) {
+        console.log('📁 Output folder:', outputFolderPath);
+      }
+
+      const result = await uploadManuscript(selectedFile, {
+        outputFolderPath: outputFolderPath || undefined
+      });
+
       console.log('✓ Upload result:', result);
-      
+
       // REFRESH #1: Immediately after successful upload
       console.log('🔄 REFRESH #1: Loading manuscripts after upload...');
       await loadManuscripts();
-      
+
       showSuccess(
-        'Upload Successful', 
-        `${file.name} has been uploaded successfully and is now being processed.`
+        'Upload Successful',
+        `${selectedFile.name} has been uploaded successfully and is now being processed.`
       );
-      
+
       setShowUploadModal(false);
-      
+      setSelectedFile(null);
+      setOutputFolderPath('');
+
     } catch (error) {
       console.error('❌ Upload failed:', error);
-      
+
       // Check if it's a timeout error
       if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
         handleError(
-          error, 
+          error,
           'Upload Timeout - The file upload took too long. Please try again with a smaller file or check your internet connection.'
         );
       } else {
@@ -698,6 +717,11 @@ export const Manuscripts = () => {
                             <div className="space-y-2">
                               {manuscript.output_files.map((file, index) => {
                                 const fileExt = file.fileName.split('.').pop().toUpperCase();
+                                const isValidationReport = file.downloadType === 'validation_report' ||
+                                  file.fileName.includes('_validation_report');
+                                const isRittdocPackage = file.downloadType === 'rittdoc_package' ||
+                                  file.fileName.includes('_rittdoc.zip');
+
                                 return (
                                   <button
                                     key={index}
@@ -705,25 +729,44 @@ export const Manuscripts = () => {
                                       e.stopPropagation();
                                       handleDownload(manuscript, file.fileName);
                                     }}
-                                    className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-lg hover:bg-blue-50 transition-all duration-200 group"
-                                    style={{
-                                      border: '1px solid #6890b8'
-                                    }}
+                                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group ${
+                                      isValidationReport
+                                        ? 'bg-amber-50 hover:bg-amber-100 border-2 border-amber-400'
+                                        : isRittdocPackage
+                                        ? 'bg-green-50 hover:bg-green-100 border-2 border-green-400'
+                                        : 'bg-white hover:bg-blue-50 border border-gray-300'
+                                    }`}
                                   >
                                     <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#e8f3f9' }}>
-                                        <FileText size={20} style={{ color: '#4f7299' }} />
+                                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                        isValidationReport
+                                          ? 'bg-amber-100'
+                                          : isRittdocPackage
+                                          ? 'bg-green-100'
+                                          : ''
+                                      }`} style={!isValidationReport && !isRittdocPackage ? { backgroundColor: '#e8f3f9' } : {}}>
+                                        {isValidationReport ? (
+                                          <FileSpreadsheet size={20} className="text-amber-600" />
+                                        ) : (
+                                          <FileText size={20} style={{ color: isRittdocPackage ? '#16a34a' : '#4f7299' }} />
+                                        )}
                                       </div>
                                       <div className="text-left">
-                                        <p className="font-semibold text-gray-900 text-sm break-all">
+                                        <p className={`font-semibold text-sm break-all ${
+                                          isValidationReport ? 'text-amber-800' : isRittdocPackage ? 'text-green-800' : 'text-gray-900'
+                                        }`}>
                                           {file.fileName}
                                         </p>
                                         <p className="text-xs text-gray-500">
+                                          {isValidationReport && <span className="text-amber-600 font-medium">Validation Report • </span>}
+                                          {isRittdocPackage && <span className="text-green-600 font-medium">Final Package • </span>}
                                           {fileExt} Format • {formatFileSize(file.fileSize)}
                                         </p>
                                       </div>
                                     </div>
-                                    <ChevronRight className="group-hover:translate-x-1 transition-transform" size={20} style={{ color: '#4f7299' }} />
+                                    <ChevronRight className={`group-hover:translate-x-1 transition-transform ${
+                                      isValidationReport ? 'text-amber-500' : isRittdocPackage ? 'text-green-500' : ''
+                                    }`} size={20} style={!isValidationReport && !isRittdocPackage ? { color: '#4f7299' } : {}} />
                                   </button>
                                 );
                               })}
@@ -824,15 +867,76 @@ export const Manuscripts = () => {
                 </div>
               ) : (
                 <>
-                  <FileUpload onFileSelect={handleFileSelect} accept=".pdf,.epub" maxSize={524288000} />
+                  {!selectedFile ? (
+                    <FileUpload onFileSelect={handleFileSelect} accept=".pdf,.epub" maxSize={524288000} />
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Selected File Display */}
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <File size={24} className="text-green-600" />
+                            <div>
+                              <p className="font-semibold text-gray-900">{selectedFile.name}</p>
+                              <p className="text-sm text-gray-500">
+                                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setSelectedFile(null)}
+                            className="p-1 hover:bg-green-100 rounded-full transition-colors"
+                          >
+                            <X size={20} className="text-gray-500" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Output Folder Path Input */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <div className="flex items-center gap-2">
+                            <FolderOpen size={16} />
+                            Output Folder Path (Optional)
+                          </div>
+                        </label>
+                        <input
+                          type="text"
+                          value={outputFolderPath}
+                          onChange={(e) => setOutputFolderPath(e.target.value)}
+                          placeholder="/path/to/output/folder"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition-all"
+                          style={{ '--tw-ring-color': '#6890b8' }}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Output files will be saved to a subfolder named with the ISBN number
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-6 flex gap-3">
                     <button
                       type="button"
-                      onClick={() => setShowUploadModal(false)}
+                      onClick={() => {
+                        setShowUploadModal(false);
+                        setSelectedFile(null);
+                        setOutputFolderPath('');
+                      }}
                       className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-all"
                     >
                       Cancel
                     </button>
+                    {selectedFile && (
+                      <button
+                        type="button"
+                        onClick={handleUploadConfirm}
+                        className="flex-1 px-4 py-3 text-white rounded-lg font-semibold transition-all hover:scale-105"
+                        style={{ backgroundColor: '#4f7299' }}
+                      >
+                        Upload & Process
+                      </button>
+                    )}
                   </div>
                 </>
               )}
