@@ -1,5 +1,6 @@
 const File = require('../models/File');
 const User = require('../models/User');
+const ConversionRecord = require('../models/ConversionRecord');
 const path = require('path');
 const fs = require('fs');
 
@@ -296,6 +297,16 @@ const processFileWithExternalApi = async (file) => {
     // Update status to processing
     await file.updateStatus('processing');
 
+    // Record conversion start in tracking database
+    try {
+      const user = await User.findById(file.uploadedBy);
+      await ConversionRecord.recordStart(file, user || { _id: file.uploadedBy });
+      await ConversionRecord.recordProcessing(file._id, job.job_id);
+    } catch (trackingError) {
+      console.error('Failed to record conversion start:', trackingError);
+      // Don't fail the conversion if tracking fails
+    }
+
     // Poll for completion
     const completedJob = await apiService.pollJobUntil(
       job.job_id,
@@ -322,6 +333,19 @@ const processFileWithExternalApi = async (file) => {
         }
       });
       console.log(`File ${file._id} ready for review in editor`);
+
+      // Record ready for review in tracking database
+      try {
+        await ConversionRecord.recordReadyForReview(file._id, {
+          isbn: completedJob.metadata?.isbn,
+          title: completedJob.metadata?.title,
+          author: completedJob.metadata?.author,
+          publisher: completedJob.metadata?.publisher,
+          metrics: completedJob.metadata?.metrics
+        });
+      } catch (trackingError) {
+        console.error('Failed to record ready for review:', trackingError);
+      }
 
     } else if (mappedStatus === 'completed') {
       // Download output files from external API
@@ -409,6 +433,21 @@ const processFileWithExternalApi = async (file) => {
 
       console.log(`File ${file._id} processed successfully via ${externalService} API`);
 
+      // Record completion in tracking database
+      try {
+        const isbn = completedJob.metadata?.isbn || completedJob.isbn;
+        await ConversionRecord.recordComplete(file._id, outputFilesWithGridFS, {
+          isbn: isbn?.replace(/-/g, ''),
+          title: completedJob.metadata?.title,
+          author: completedJob.metadata?.author,
+          publisher: completedJob.metadata?.publisher,
+          metrics: completedJob.metadata?.metrics,
+          quality: completedJob.metadata?.quality
+        });
+      } catch (trackingError) {
+        console.error('Failed to record completion:', trackingError);
+      }
+
       // Send success email notification
       try {
         const user = await User.findById(file.uploadedBy);
@@ -454,6 +493,13 @@ const processFileWithExternalApi = async (file) => {
         await file.updateStatus('failed', {
           errorMessage: errorMessage
         });
+
+        // Record failure in tracking database
+        try {
+          await ConversionRecord.recordFailure(file._id, errorMessage);
+        } catch (trackingError) {
+          console.error('Failed to record failure:', trackingError);
+        }
 
         // Send failure email
         try {
@@ -921,6 +967,109 @@ const getConversionDashboardFiles = async (req, res) => {
 };
 
 
+// @desc    Get all conversion records with optional filtering
+// @route   GET /api/files/conversion-records
+// @access  Private/Admin
+const getConversionRecords = async (req, res) => {
+  try {
+    const {
+      status,
+      fileType,
+      startDate,
+      endDate,
+      search,
+      limit = 100,
+      offset = 0,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
+
+    // Build filter query
+    const query = {};
+
+    if (status && status !== 'all') {
+      query.status = status;
+    }
+    if (fileType && fileType !== 'all') {
+      query.fileType = fileType.toLowerCase();
+    }
+    if (startDate) {
+      query.createdAt = { ...query.createdAt, $gte: new Date(startDate) };
+    }
+    if (endDate) {
+      query.createdAt = { ...query.createdAt, $lte: new Date(endDate) };
+    }
+    if (search) {
+      query.$or = [
+        { fileName: { $regex: search, $options: 'i' } },
+        { isbn: { $regex: search, $options: 'i' } },
+        { title: { $regex: search, $options: 'i' } },
+        { uploadedByUsername: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // Get total count
+    const total = await ConversionRecord.countDocuments(query);
+
+    // Get records with pagination and sorting
+    const records = await ConversionRecord.find(query)
+      .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
+      .skip(parseInt(offset))
+      .limit(parseInt(limit))
+      .populate('uploadedBy', 'username email')
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      data: {
+        records,
+        total,
+        limit: parseInt(limit),
+        offset: parseInt(offset)
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching conversion records:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching conversion records',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get conversion statistics/dashboard
+// @route   GET /api/files/conversion-stats
+// @access  Private/Admin
+const getConversionStats = async (req, res) => {
+  try {
+    const { startDate, endDate, fileType } = req.query;
+
+    const filters = {};
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    if (fileType) filters.fileType = fileType;
+
+    const stats = await ConversionRecord.getDashboardStats(filters);
+    const dailyStats = await ConversionRecord.getDailyStats(30);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        summary: stats,
+        daily: dailyStats
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching conversion stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching conversion stats',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   uploadFile,
   getUserFiles,
@@ -929,6 +1078,8 @@ module.exports = {
   downloadOutputFile,
   deleteFile,
   getConversionDashboardFiles,
+  getConversionRecords,
+  getConversionStats,
   // New external API endpoints
   launchEditor,
   finalizeFile

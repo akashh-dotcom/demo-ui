@@ -8,6 +8,8 @@ const {
   downloadOutputFile,
   deleteFile,
   getConversionDashboardFiles,
+  getConversionRecords,
+  getConversionStats,
   launchEditor,
   finalizeFile
 } = require('../controllers/fileController');
@@ -26,6 +28,11 @@ router.get('/', getUserFiles);
 
 router.get('/conversion-dashboard', authorizeAdmin, getConversionDashboardFiles);
 
+// Get conversion records (Admin only) - new MongoDB-based tracking
+router.get('/conversion-records', authorizeAdmin, getConversionRecords);
+
+// Get conversion statistics (Admin only)
+router.get('/conversion-stats', authorizeAdmin, getConversionStats);
 
 // Get all files (Admin only)
 router.get('/all', authorizeAdmin, getAllFiles);

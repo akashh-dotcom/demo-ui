@@ -587,5 +587,25 @@ export const getConversionDashboardFiles = async (params = {}) => {
   return response.data;
 };
 
+/**
+ * Get conversion records from MongoDB (Admin only)
+ * @param {Object} params - Query parameters { status, fileType, startDate, endDate, search, limit, offset, sortBy, sortOrder }
+ * @returns {Promise} - { records, total, limit, offset }
+ */
+export const getConversionRecords = async (params = {}) => {
+  const response = await api.get('/files/conversion-records', { params });
+  return response.data;
+};
+
+/**
+ * Get conversion statistics (Admin only)
+ * @param {Object} params - Query parameters { startDate, endDate, fileType }
+ * @returns {Promise} - { summary, daily }
+ */
+export const getConversionStats = async (params = {}) => {
+  const response = await api.get('/files/conversion-stats', { params });
+  return response.data;
+};
+
 // Export axios instance as default for custom requests
 export default api;
