@@ -111,8 +111,11 @@ services:
       # AI API Keys - set these in your .env file
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # PDF Editor configuration
+      PDFTOXML_EDITOR_PORT_START: 5100
     ports:
       - "8000:8000"
+      - "5100:5100"  # PDF Editor port
     volumes:
       - pdf-uploads:/app/uploads
       - pdf-outputs:/app/outputs
