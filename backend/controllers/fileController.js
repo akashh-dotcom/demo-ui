@@ -534,11 +534,11 @@ const launchEditor = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    // Check if file is ready for review
-    if (file.status !== 'ready_for_review') {
+    // Check if file is ready for review or completed (allow re-editing completed files)
+    if (file.status !== 'ready_for_review' && file.status !== 'completed') {
       return res.status(400).json({
         success: false,
-        message: `Cannot launch editor. File status is '${file.status}', expected 'ready_for_review'`
+        message: `Cannot launch editor. File status is '${file.status}', expected 'ready_for_review' or 'completed'`
       });
     }
 
