@@ -347,7 +347,17 @@ const processFileWithExternalApi = async (file) => {
         }
       } else if (externalService === 'epub') {
         // EPUB API: Download result ZIP
-        const zipPath = path.join(outputDir, `${path.basename(file.originalName, '.epub')}_output.zip`);
+        // Try to get ISBN from job metadata for better naming
+        let zipFileName;
+        const isbn = completedJob.metadata?.isbn || completedJob.isbn;
+        if (isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)) {
+          // Clean ISBN (remove hyphens) and use as filename
+          zipFileName = `${isbn.replace(/-/g, '')}.zip`;
+        } else {
+          // Fall back to original filename
+          zipFileName = `${path.basename(file.originalName, '.epub')}_output.zip`;
+        }
+        const zipPath = path.join(outputDir, zipFileName);
         await epubApiService.downloadResult(job.job_id, zipPath);
         const stats = fs.statSync(zipPath);
         outputFiles.push({
@@ -356,6 +366,14 @@ const processFileWithExternalApi = async (file) => {
           fileType: 'zip',
           fileSize: stats.size
         });
+
+        // Store ISBN in conversion metadata if available
+        if (isbn && isbn !== 'UNKNOWN') {
+          file.conversionMetadata = {
+            ...file.conversionMetadata,
+            isbn: isbn.replace(/-/g, '')
+          };
+        }
       }
 
       // Upload output files to GridFS

@@ -576,20 +576,24 @@ export const Manuscripts = () => {
                         </div>
                       )}
 
-                      {/* Edit & Finalize Section - Show for ready_for_review and editing statuses */}
-                      {(manuscript.status === 'ready_for_review' || manuscript.status === 'editing') && (
+                      {/* Edit & Finalize Section - Show for ready_for_review, editing, and completed statuses */}
+                      {(manuscript.status === 'ready_for_review' || manuscript.status === 'editing' || manuscript.status === 'completed') && (
                         <div className="mb-6 p-4 rounded-lg border-2" style={{
-                          backgroundColor: '#faf5ff',
-                          borderColor: '#a855f7'
+                          backgroundColor: manuscript.status === 'completed' ? '#f0fdf4' : '#faf5ff',
+                          borderColor: manuscript.status === 'completed' ? '#22c55e' : '#a855f7'
                         }}>
                           <div className="flex items-center gap-2 mb-3">
-                            <Edit3 size={20} style={{ color: '#7c3aed' }} />
-                            <h4 className="font-semibold text-gray-900">Review & Edit Document</h4>
+                            <Edit3 size={20} style={{ color: manuscript.status === 'completed' ? '#15803d' : '#7c3aed' }} />
+                            <h4 className="font-semibold text-gray-900">
+                              {manuscript.status === 'completed' ? 'Edit & Reprocess' : 'Review & Edit Document'}
+                            </h4>
                           </div>
                           <p className="text-sm text-gray-600 mb-4">
                             {manuscript.status === 'ready_for_review'
                               ? 'Your document is ready for review. Click "Open Editor" to make changes, then finalize when done.'
-                              : 'Your document is currently being edited. You can continue editing or finalize the document.'}
+                              : manuscript.status === 'editing'
+                              ? 'Your document is currently being edited. You can continue editing or finalize the document.'
+                              : 'Need to make changes? Open the editor to modify the document and reprocess to generate updated output files.'}
                           </p>
                           <div className="flex flex-col sm:flex-row gap-3">
                             {/* Launch Editor Button */}
@@ -601,8 +605,8 @@ export const Manuscripts = () => {
                               disabled={editorLoading === manuscript.id}
                               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
                               style={{
-                                backgroundColor: '#7c3aed',
-                                border: '2px solid #6d28d9'
+                                backgroundColor: manuscript.status === 'completed' ? '#15803d' : '#7c3aed',
+                                border: `2px solid ${manuscript.status === 'completed' ? '#166534' : '#6d28d9'}`
                               }}
                             >
                               {editorLoading === manuscript.id ? (
@@ -618,32 +622,34 @@ export const Manuscripts = () => {
                               )}
                             </button>
 
-                            {/* Finalize Button */}
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleFinalize(manuscript);
-                              }}
-                              disabled={finalizingFile === manuscript.id}
-                              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold border-2 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
-                              style={{
-                                backgroundColor: '#f0fdf4',
-                                borderColor: '#22c55e',
-                                color: '#15803d'
-                              }}
-                            >
-                              {finalizingFile === manuscript.id ? (
-                                <>
-                                  <Loader2 size={18} className="animate-spin" />
-                                  Finalizing...
-                                </>
-                              ) : (
-                                <>
-                                  <CheckCircle size={18} />
-                                  Finalize Document
-                                </>
-                              )}
-                            </button>
+                            {/* Finalize Button - Only show for non-completed statuses */}
+                            {manuscript.status !== 'completed' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleFinalize(manuscript);
+                                }}
+                                disabled={finalizingFile === manuscript.id}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold border-2 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                                style={{
+                                  backgroundColor: '#f0fdf4',
+                                  borderColor: '#22c55e',
+                                  color: '#15803d'
+                                }}
+                              >
+                                {finalizingFile === manuscript.id ? (
+                                  <>
+                                    <Loader2 size={18} className="animate-spin" />
+                                    Finalizing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle size={18} />
+                                    Finalize Document
+                                  </>
+                                )}
+                              </button>
+                            )}
                           </div>
 
                           {/* Editor URL if available */}
