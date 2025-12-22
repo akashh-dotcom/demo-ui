@@ -11,12 +11,17 @@ const {
   getConversionRecords,
   getConversionStats,
   launchEditor,
-  finalizeFile
+  finalizeFile,
+  webhookComplete
 } = require('../controllers/fileController');
 const { authenticate, authorizeAdmin } = require('../middleware/auth');
 const { upload, handleMulterError } = require('../middleware/upload');
 
-// All routes require authentication
+// Webhook endpoint (no auth - called by external editors)
+// External editors call this when user saves/completes editing
+router.post('/webhook/complete', webhookComplete);
+
+// All other routes require authentication
 router.use(authenticate);
 
 // File upload route

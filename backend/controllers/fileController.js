@@ -631,6 +631,11 @@ const finalizeFile = async (req, res) => {
       const filesResponse = await pdfApiService.listOutputFiles(file.externalJobId);
       for (const outputFile of filesResponse.files || []) {
         const localPath = path.join(outputDir, outputFile.name);
+        // Create subdirectories if needed (e.g., MultiMedia/image.png)
+        const localDir = path.dirname(localPath);
+        if (!fs.existsSync(localDir)) {
+          fs.mkdirSync(localDir, { recursive: true });
+        }
         await pdfApiService.downloadFile(file.externalJobId, outputFile.name, localPath);
         outputFiles.push({
           filePath: localPath,
@@ -1107,6 +1112,152 @@ const getConversionStats = async (req, res) => {
   }
 };
 
+// @desc    Webhook for external editors to push completed packages
+// @route   POST /api/files/webhook/complete
+// @access  Internal (from PDF/EPUB editors)
+const webhookComplete = async (req, res) => {
+  try {
+    const { jobId, status, fileType, metadata } = req.body;
+
+    if (!jobId) {
+      return res.status(400).json({ success: false, message: 'Missing jobId' });
+    }
+
+    console.log(`Webhook received: jobId=${jobId}, status=${status}, fileType=${fileType}`);
+
+    // Find file by external job ID
+    const file = await File.findOne({ externalJobId: jobId });
+    if (!file) {
+      return res.status(404).json({ success: false, message: 'File not found for jobId: ' + jobId });
+    }
+
+    // If status is 'completed' or 'saved', download the output and finalize
+    if (status === 'completed' || status === 'saved') {
+      const tempDir = path.join(__dirname, '../temp', file._id.toString());
+      const outputDir = path.join(tempDir, 'output');
+      if (!fs.existsSync(outputDir)) {
+        fs.mkdirSync(outputDir, { recursive: true });
+      }
+
+      let outputFiles = [];
+
+      if (file.externalService === 'pdf') {
+        // Download output files from PDF API
+        const filesResponse = await pdfApiService.listOutputFiles(jobId);
+        for (const outputFile of filesResponse.files || []) {
+          const localPath = path.join(outputDir, outputFile.name);
+          const localDir = path.dirname(localPath);
+          if (!fs.existsSync(localDir)) {
+            fs.mkdirSync(localDir, { recursive: true });
+          }
+          await pdfApiService.downloadFile(jobId, outputFile.name, localPath);
+          outputFiles.push({
+            filePath: localPath,
+            fileName: outputFile.name,
+            fileType: path.extname(outputFile.name).replace('.', ''),
+            fileSize: outputFile.size || fs.statSync(localPath).size
+          });
+        }
+      } else if (file.externalService === 'epub') {
+        // Download result ZIP from EPUB API
+        let zipFileName;
+        const isbn = metadata?.isbn || file.conversionMetadata?.isbn;
+        if (isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)) {
+          zipFileName = `${isbn.replace(/-/g, '')}.zip`;
+        } else {
+          zipFileName = `${path.basename(file.originalName, '.epub')}_output.zip`;
+        }
+        const zipPath = path.join(outputDir, zipFileName);
+        await epubApiService.downloadResult(jobId, zipPath);
+        const stats = fs.statSync(zipPath);
+        outputFiles.push({
+          filePath: zipPath,
+          fileName: path.basename(zipPath),
+          fileType: 'zip',
+          fileSize: stats.size
+        });
+      }
+
+      // Upload to GridFS
+      const gridfsFiles = await uploadMultipleToGridFS(outputFiles, {
+        sourceFileId: file._id,
+        uploadedBy: file.uploadedBy,
+        conversionType: file.externalService.toUpperCase()
+      });
+
+      const outputFilesWithGridFS = outputFiles.map((f, index) => ({
+        fileName: f.fileName,
+        filePath: null,
+        fileType: f.fileType,
+        fileSize: f.fileSize,
+        gridfsFileId: gridfsFiles[index].fileId,
+        storedInGridFS: true
+      }));
+
+      // Update file status to completed
+      await file.updateStatus('completed', {
+        outputFiles: outputFilesWithGridFS,
+        editorUrl: null,
+        conversionMetadata: {
+          ...file.conversionMetadata,
+          ...metadata
+        }
+      });
+
+      // Record completion in tracking database
+      try {
+        await ConversionRecord.recordComplete(file._id, outputFilesWithGridFS, {
+          isbn: metadata?.isbn || file.conversionMetadata?.isbn
+        });
+      } catch (trackingError) {
+        console.error('Failed to record completion:', trackingError);
+      }
+
+      // Clean up temp files
+      try {
+        await cleanupDirectory(tempDir);
+      } catch (e) {
+        console.error('Cleanup error:', e);
+      }
+
+      // Send success email
+      try {
+        const user = await User.findById(file.uploadedBy);
+        if (user && user.email) {
+          await sendConversionSuccessEmail(user.email, file.originalName, outputFilesWithGridFS, file._id);
+        }
+      } catch (emailError) {
+        console.error('Email error:', emailError);
+      }
+
+      console.log(`File ${file._id} completed via webhook`);
+    } else if (status === 'failed') {
+      await file.updateStatus('failed', {
+        errorMessage: metadata?.error || 'Processing failed'
+      });
+      try {
+        await ConversionRecord.recordFailure(file._id, metadata?.error || 'Processing failed');
+      } catch (e) {
+        console.error('Failed to record failure:', e);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Webhook processed successfully',
+      fileId: file._id.toString()
+    });
+
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Webhook processing failed',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   uploadFile,
   getUserFiles,
@@ -1117,7 +1268,8 @@ module.exports = {
   getConversionDashboardFiles,
   getConversionRecords,
   getConversionStats,
-  // New external API endpoints
+  // External API endpoints
   launchEditor,
-  finalizeFile
+  finalizeFile,
+  webhookComplete
 };
