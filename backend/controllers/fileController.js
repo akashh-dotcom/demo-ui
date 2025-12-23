@@ -385,8 +385,9 @@ const processFileWithExternalApi = async (file) => {
           // Clean ISBN (remove hyphens) and use as filename
           zipFileName = `${isbn.replace(/-/g, '')}.zip`;
         } else {
-          // Fall back to original filename
-          zipFileName = `${path.basename(file.originalName, '.epub')}_output.zip`;
+          // Fall back to original filename (case-insensitive extension removal)
+          const baseName = file.originalName.replace(/\.epub$/i, '');
+          zipFileName = `${baseName}_output.zip`;
         }
         const zipPath = path.join(outputDir, zipFileName);
         await epubApiService.downloadResult(job.job_id, zipPath);
@@ -669,7 +670,9 @@ const finalizeFile = async (req, res) => {
       if (isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)) {
         zipFileName = `${isbn.replace(/-/g, '')}.zip`;
       } else {
-        zipFileName = `${path.basename(file.originalName, '.epub')}_output.zip`;
+        // Case-insensitive extension removal
+        const baseName = file.originalName.replace(/\.epub$/i, '');
+        zipFileName = `${baseName}_output.zip`;
       }
 
       const zipPath = path.join(outputDir, zipFileName);
@@ -1282,7 +1285,9 @@ const webhookComplete = async (req, res) => {
         if (isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)) {
           zipFileName = `${isbn.replace(/-/g, '')}.zip`;
         } else {
-          zipFileName = `${path.basename(file.originalName, '.epub')}_output.zip`;
+          // Case-insensitive extension removal
+          const baseName = file.originalName.replace(/\.epub$/i, '');
+          zipFileName = `${baseName}_output.zip`;
         }
         const zipPath = path.join(outputDir, zipFileName);
 
@@ -1312,9 +1317,10 @@ const webhookComplete = async (req, res) => {
 
         // Download validation report if URL provided
         if (downloadUrls?.report) {
+          const baseNameForReport = file.originalName.replace(/\.epub$/i, '');
           const reportFileName = isbn && isbn !== 'UNKNOWN'
             ? `${isbn.replace(/-/g, '')}_validation_report.xlsx`
-            : `${path.basename(file.originalName, '.epub')}_validation_report.xlsx`;
+            : `${baseNameForReport}_validation_report.xlsx`;
           const reportPath = path.join(outputDir, reportFileName);
 
           console.log(`Downloading EPUB validation report from: ${downloadUrls.report}`);
