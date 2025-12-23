@@ -61,6 +61,7 @@ services:
       PDF_API_URL: http://pdf-api:8000
       EPUB_API_URL: http://epub-api:5001
       EPUB_EDITOR_URL: http://epub-editor:5000
+      EPUB_EDITOR_PUBLIC_URL: http://localhost:5002
     ports:
       - "5000:5000"
     volumes:
