@@ -342,6 +342,11 @@ const processFileWithExternalApi = async (file) => {
         const filesResponse = await pdfApiService.listOutputFiles(job.job_id);
         for (const outputFile of filesResponse.files || []) {
           const localPath = path.join(outputDir, outputFile.name);
+          // Create subdirectories if needed (e.g., MultiMedia/image.png)
+          const localDir = path.dirname(localPath);
+          if (!fs.existsSync(localDir)) {
+            fs.mkdirSync(localDir, { recursive: true });
+          }
           await pdfApiService.downloadFile(job.job_id, outputFile.name, localPath);
           outputFiles.push({
             filePath: localPath,
