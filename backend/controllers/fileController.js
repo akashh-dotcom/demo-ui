@@ -323,38 +323,12 @@ const processFileWithExternalApi = async (file) => {
       }
     );
 
-    // Map external status to internal status
-    const mappedStatus = apiService.mapStatusToFileStatus(completedJob.status);
-
     if (completedJob.status === 'failed') {
       throw new Error(completedJob.error || 'External conversion failed');
     }
 
-    // Handle different final states
-    if (mappedStatus === 'ready_for_review') {
-      // PDF API: Job is ready for editor review
-      await file.updateStatus('ready_for_review', {
-        conversionMetadata: {
-          conversionType: externalService.toUpperCase(),
-          outputFormats: ['xml', 'docx', 'zip']
-        }
-      });
-      console.log(`File ${file._id} ready for review in editor`);
-
-      // Record ready for review in tracking database
-      try {
-        await ConversionRecord.recordReadyForReview(file._id, {
-          isbn: completedJob.metadata?.isbn,
-          title: completedJob.metadata?.title,
-          author: completedJob.metadata?.author,
-          publisher: completedJob.metadata?.publisher,
-          metrics: completedJob.metadata?.metrics
-        });
-      } catch (trackingError) {
-        console.error('Failed to record ready for review:', trackingError);
-      }
-
-    } else if (mappedStatus === 'completed') {
+    // Conversion completed - download output files
+    if (completedJob.status === 'completed') {
       // Download output files from external API
       const outputDir = path.join(tempDir, 'output');
       if (!fs.existsSync(outputDir)) {
@@ -542,11 +516,11 @@ const launchEditor = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    // Check if file is ready for review or completed (allow re-editing completed files)
-    if (file.status !== 'ready_for_review' && file.status !== 'completed') {
+    // Check if file is completed (editor is optional post-completion feature)
+    if (file.status !== 'completed' && file.status !== 'editing') {
       return res.status(400).json({
         success: false,
-        message: `Cannot launch editor. File status is '${file.status}', expected 'ready_for_review' or 'completed'`
+        message: `Cannot launch editor. File status is '${file.status}', expected 'completed'`
       });
     }
 
@@ -587,9 +561,11 @@ const launchEditor = async (req, res) => {
   }
 };
 
-// @desc    Finalize file after editing (PDF and EPUB)
+// @desc    Refresh output files after editing (PDF and EPUB)
 // @route   POST /api/files/:id/finalize
 // @access  Private
+// Note: This endpoint refreshes/re-downloads output files after editing.
+// The PDF API no longer requires a separate "finalize" step - files are ready immediately.
 const finalizeFile = async (req, res) => {
   try {
     const file = await File.findById(req.params.id);
@@ -603,16 +579,13 @@ const finalizeFile = async (req, res) => {
       return res.status(403).json({ success: false, message: 'Access denied' });
     }
 
-    // Check if file can be finalized
-    if (!['ready_for_review', 'editing', 'completed'].includes(file.status)) {
+    // Check if file can be refreshed (must be editing or completed)
+    if (!['editing', 'completed'].includes(file.status)) {
       return res.status(400).json({
         success: false,
-        message: `Cannot finalize. File status is '${file.status}'`
+        message: `Cannot refresh files. File status is '${file.status}'`
       });
     }
-
-    // Update status to finalizing
-    await file.updateStatus('finalizing');
 
     const tempDir = path.join(__dirname, '../temp', file._id.toString());
     const outputDir = path.join(tempDir, 'output');
@@ -623,19 +596,8 @@ const finalizeFile = async (req, res) => {
     let outputFiles = [];
 
     if (file.externalService === 'pdf') {
-      // PDF: Call finalize and poll for completion
-      await pdfApiService.finalizeJob(file.externalJobId);
-
-      const completedJob = await pdfApiService.pollJobUntil(
-        file.externalJobId,
-        pdfApiService.TERMINAL_STATUSES
-      );
-
-      if (completedJob.status === 'failed') {
-        throw new Error(completedJob.error || 'Finalization failed');
-      }
-
-      // Download output files
+      // PDF: Files are ready immediately - just refresh/re-download
+      // No finalize call needed anymore
       const filesResponse = await pdfApiService.listOutputFiles(file.externalJobId);
       for (const outputFile of filesResponse.files || []) {
         const localPath = path.join(outputDir, outputFile.name);

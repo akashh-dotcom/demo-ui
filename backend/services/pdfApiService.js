@@ -20,17 +20,19 @@ const PDF_POLL_INTERVAL = parseInt(process.env.PDF_POLL_INTERVAL) || 2000;
 
 /**
  * Job status values from PDF API
+ * Note: ready_for_review and finalizing are deprecated - conversion now goes directly to completed
  */
 const JobStatus = {
   PENDING: 'pending',
   PROCESSING: 'processing',
   EXTRACTING: 'extracting',
   CONVERTING: 'converting',
-  READY_FOR_REVIEW: 'ready_for_review',
+  PACKAGING: 'packaging',
+  VALIDATING: 'validating',
   EDITING: 'editing',
-  FINALIZING: 'finalizing',
   COMPLETED: 'completed',
-  FAILED: 'failed'
+  FAILED: 'failed',
+  CANCELLED: 'cancelled'
 };
 
 /**
@@ -40,8 +42,9 @@ const TERMINAL_STATUSES = [JobStatus.COMPLETED, JobStatus.FAILED];
 
 /**
  * Statuses that indicate job is ready for user action
+ * Now the same as terminal statuses since ready_for_review was removed
  */
-const ACTIONABLE_STATUSES = [JobStatus.READY_FOR_REVIEW, JobStatus.COMPLETED, JobStatus.FAILED];
+const ACTIONABLE_STATUSES = [JobStatus.COMPLETED, JobStatus.FAILED];
 
 /**
  * Make HTTP request to PDF API
@@ -307,11 +310,12 @@ function mapStatusToFileStatus(pdfStatus) {
     'processing': 'processing',
     'extracting': 'processing',
     'converting': 'processing',
-    'ready_for_review': 'ready_for_review',
+    'packaging': 'processing',
+    'validating': 'processing',
     'editing': 'editing',
-    'finalizing': 'finalizing',
     'completed': 'completed',
-    'failed': 'failed'
+    'failed': 'failed',
+    'cancelled': 'failed'
   };
 
   return statusMap[pdfStatus] || 'processing';

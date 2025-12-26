@@ -28,6 +28,10 @@ import {
 } from 'lucide-react';
 import { launchEditor, finalizeFile } from '../utils/api';
 
+// Note: The PDF API no longer requires a separate "finalize" step.
+// Files are ready immediately when status = 'completed'.
+// Editor is now optional (post-completion feature for corrections).
+
 export const Manuscripts = () => {
   const { manuscripts, loading, getManuscripts, uploadManuscript, deleteManuscript, getDownloadUrl, uploadProgress } = useManuscripts();
   const { downloadFile } = useDownload();
@@ -220,29 +224,13 @@ export const Manuscripts = () => {
         label: 'Processing',
         description: 'Converting file formats'
       },
-      ready_for_review: {
-        color: 'text-purple-700',
-        bgColor: 'bg-purple-50',
-        borderColor: 'border-purple-200',
-        icon: Edit3,
-        label: 'Ready for Review',
-        description: 'Ready for editing'
-      },
       editing: {
         color: 'text-orange-700',
         bgColor: 'bg-orange-50',
         borderColor: 'border-orange-200',
         icon: Edit3,
         label: 'Editing',
-        description: 'Being edited'
-      },
-      finalizing: {
-        color: 'text-indigo-700',
-        bgColor: 'bg-indigo-50',
-        borderColor: 'border-indigo-200',
-        icon: Loader2,
-        label: 'Finalizing',
-        description: 'Generating final output'
+        description: 'Being edited in web editor'
       },
       completed: {
         color: 'text-success-700',
@@ -260,15 +248,23 @@ export const Manuscripts = () => {
         label: 'Failed',
         description: 'Conversion failed'
       },
+      cancelled: {
+        color: 'text-gray-700',
+        bgColor: 'bg-gray-50',
+        borderColor: 'border-gray-200',
+        icon: AlertCircle,
+        label: 'Cancelled',
+        description: 'Conversion was cancelled'
+      },
     };
     return statusMap[status] || statusMap.processing;
   };
 
   const getTrackingSteps = (status) => {
+    // Simplified steps - conversion now goes directly to completed
     const steps = [
       { id: 'uploaded', label: 'Uploaded', icon: Upload },
       { id: 'processing', label: 'Processing', icon: Clock },
-      { id: 'ready_for_review', label: 'Review', icon: Edit3 },
       { id: 'completed', label: 'Completed', icon: CheckCircle }
     ];
 
@@ -277,26 +273,24 @@ export const Manuscripts = () => {
       'uploaded': 0,
       'pending': 0,
       'processing': 1,
-      'ready_for_review': 2,
-      'editing': 2,
-      'finalizing': 3,
-      'completed': 4,
-      'failed': -1
+      'editing': 2,  // Editing is post-completion, so show as completed
+      'completed': 3,
+      'failed': -1,
+      'cancelled': -1
     };
 
     const currentIndex = statusToIndex[status] ?? 1;
 
     return steps.map((step, index) => {
       const stepIndex = index;
-      const isEditing = status === 'editing' && step.id === 'ready_for_review';
-      const isFinalizing = status === 'finalizing' && step.id === 'completed';
+      const isEditing = status === 'editing' && step.id === 'completed';
 
       return {
         ...step,
         isCompleted: stepIndex < currentIndex,
-        isCurrent: stepIndex === currentIndex || isEditing || isFinalizing,
-        isFailed: status === 'failed' && stepIndex === steps.length - 1,
-        label: isEditing ? 'Editing' : (isFinalizing ? 'Finalizing' : step.label)
+        isCurrent: stepIndex === currentIndex || isEditing,
+        isFailed: (status === 'failed' || status === 'cancelled') && stepIndex === steps.length - 1,
+        label: isEditing ? 'Editing' : step.label
       };
     });
   };
@@ -402,10 +396,9 @@ export const Manuscripts = () => {
               >
                 <option value="all">All Status</option>
                 <option value="uploaded">Uploaded</option>
+                <option value="pending">Pending</option>
                 <option value="processing">Processing</option>
-                <option value="ready_for_review">Ready for Review</option>
                 <option value="editing">Editing</option>
-                <option value="finalizing">Finalizing</option>
                 <option value="completed">Completed</option>
                 <option value="failed">Failed</option>
               </select>
@@ -595,24 +588,22 @@ export const Manuscripts = () => {
                         </div>
                       )}
 
-                      {/* Edit & Finalize Section - Show for ready_for_review, editing, and completed statuses */}
-                      {(manuscript.status === 'ready_for_review' || manuscript.status === 'editing' || manuscript.status === 'completed') && (
+                      {/* Edit Section - Show for editing and completed statuses (editor is optional post-completion) */}
+                      {(manuscript.status === 'editing' || manuscript.status === 'completed') && (
                         <div className="mb-6 p-4 rounded-lg border-2" style={{
-                          backgroundColor: manuscript.status === 'completed' ? '#f0fdf4' : '#faf5ff',
-                          borderColor: manuscript.status === 'completed' ? '#22c55e' : '#a855f7'
+                          backgroundColor: '#f0fdf4',
+                          borderColor: '#22c55e'
                         }}>
                           <div className="flex items-center gap-2 mb-3">
-                            <Edit3 size={20} style={{ color: manuscript.status === 'completed' ? '#15803d' : '#7c3aed' }} />
+                            <Edit3 size={20} style={{ color: '#15803d' }} />
                             <h4 className="font-semibold text-gray-900">
-                              {manuscript.status === 'completed' ? 'Edit & Reprocess' : 'Review & Edit Document'}
+                              {manuscript.status === 'editing' ? 'Editing in Progress' : 'Edit Document (Optional)'}
                             </h4>
                           </div>
                           <p className="text-sm text-gray-600 mb-4">
-                            {manuscript.status === 'ready_for_review'
-                              ? 'Your document is ready for review. Click "Open Editor" to make changes. After saving in the editor, click "Finalize Document" to generate the final output files.'
-                              : manuscript.status === 'editing'
-                              ? 'Your document is being edited. After saving your changes in the editor, click "Finalize Document" to complete and download.'
-                              : 'Need to make changes? Open the editor, make your edits, save them, then click "Finalize Document" to regenerate the output files.'}
+                            {manuscript.status === 'editing'
+                              ? 'Your document is open in the editor. After making changes, save in the editor and click "Refresh Files" to download the updated output.'
+                              : 'Need to make corrections? Open the editor to modify your document. Changes are saved automatically when you save in the editor.'}
                           </p>
                           <div className="flex flex-col sm:flex-row gap-3">
                             {/* Launch Editor Button */}
@@ -624,8 +615,8 @@ export const Manuscripts = () => {
                               disabled={editorLoading === manuscript.id}
                               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
                               style={{
-                                backgroundColor: manuscript.status === 'completed' ? '#15803d' : '#7c3aed',
-                                border: `2px solid ${manuscript.status === 'completed' ? '#166534' : '#6d28d9'}`
+                                backgroundColor: '#15803d',
+                                border: '2px solid #166534'
                               }}
                             >
                               {editorLoading === manuscript.id ? (
@@ -641,8 +632,8 @@ export const Manuscripts = () => {
                               )}
                             </button>
 
-                            {/* Finalize Button - Only show for non-completed statuses */}
-                            {manuscript.status !== 'completed' && (
+                            {/* Refresh Files Button - Only show when editing to get updated files */}
+                            {manuscript.status === 'editing' && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -651,20 +642,20 @@ export const Manuscripts = () => {
                                 disabled={finalizingFile === manuscript.id}
                                 className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold border-2 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
                                 style={{
-                                  backgroundColor: '#f0fdf4',
-                                  borderColor: '#22c55e',
-                                  color: '#15803d'
+                                  backgroundColor: '#e8f3f9',
+                                  borderColor: '#6890b8',
+                                  color: '#4f7299'
                                 }}
                               >
                                 {finalizingFile === manuscript.id ? (
                                   <>
                                     <Loader2 size={18} className="animate-spin" />
-                                    Finalizing...
+                                    Refreshing...
                                   </>
                                 ) : (
                                   <>
-                                    <CheckCircle size={18} />
-                                    Finalize Document
+                                    <RefreshCw size={18} />
+                                    Refresh Files
                                   </>
                                 )}
                               </button>
@@ -673,32 +664,12 @@ export const Manuscripts = () => {
 
                           {/* Editor URL if available */}
                           {manuscript.editor_url && (
-                            <div className="mt-3 p-2 bg-white rounded border border-purple-200">
+                            <div className="mt-3 p-2 bg-white rounded border border-green-200">
                               <p className="text-xs text-gray-500">
-                                Editor URL: <a href={manuscript.editor_url} target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">{manuscript.editor_url}</a>
+                                Editor URL: <a href={manuscript.editor_url} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">{manuscript.editor_url}</a>
                               </p>
                             </div>
                           )}
-                        </div>
-                      )}
-
-                      {/* Finalizing Notice */}
-                      {manuscript.status === 'finalizing' && (
-                        <div className="mb-6 p-4 rounded-lg border-2" style={{
-                          backgroundColor: '#eef2ff',
-                          borderColor: '#6366f1'
-                        }}>
-                          <div className="flex items-start gap-2">
-                            <Loader2 size={18} style={{ color: '#4f46e5' }} className="flex-shrink-0 mt-0.5 animate-spin" />
-                            <div>
-                              <p className="font-semibold text-sm" style={{ color: '#312e81' }}>
-                                Finalizing Document
-                              </p>
-                              <p className="text-sm mt-1" style={{ color: '#4f46e5' }}>
-                                Your document is being finalized. Click <strong>"Refresh"</strong> to check when it's complete.
-                              </p>
-                            </div>
-                          </div>
                         </div>
                       )}
 
@@ -776,20 +747,15 @@ export const Manuscripts = () => {
                               {(manuscript.status === 'processing' || manuscript.status === 'uploaded' || manuscript.status === 'pending') && (
                                 <Clock className="mx-auto text-gray-400 mb-2" size={24} />
                               )}
-                              {(manuscript.status === 'ready_for_review' || manuscript.status === 'editing') && (
-                                <Edit3 className="mx-auto text-purple-400 mb-2" size={24} />
-                              )}
-                              {manuscript.status === 'finalizing' && (
-                                <Loader2 className="mx-auto text-indigo-400 mb-2 animate-spin" size={24} />
+                              {manuscript.status === 'editing' && (
+                                <Edit3 className="mx-auto text-orange-400 mb-2" size={24} />
                               )}
                               <p className="text-sm text-gray-600">
                                 {manuscript.status === 'processing' || manuscript.status === 'uploaded' || manuscript.status === 'pending'
-                                  ? 'Files will be available after processing'
-                                  : manuscript.status === 'ready_for_review' || manuscript.status === 'editing'
-                                  ? 'Finalize the document to generate output files'
-                                  : manuscript.status === 'finalizing'
-                                  ? 'Output files are being generated...'
-                                  : manuscript.status === 'failed'
+                                  ? 'Files will be available after processing completes'
+                                  : manuscript.status === 'editing'
+                                  ? 'Save changes in editor, then click "Refresh Files" to update'
+                                  : manuscript.status === 'failed' || manuscript.status === 'cancelled'
                                   ? 'No files available due to error'
                                   : 'Processing not started'}
                               </p>

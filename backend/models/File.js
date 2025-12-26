@@ -77,12 +77,11 @@ const fileSchema = new mongoose.Schema({
     enum: [
       'uploaded',           // File received, not yet sent to processing
       'pending',            // Sent to external API, waiting to start
-      'processing',         // Being processed (extracting, converting)
-      'ready_for_review',   // PDF API: ready for editor review
-      'editing',            // User is editing in web editor
-      'finalizing',         // Creating final outputs
-      'completed',          // Done - outputs available
-      'failed'              // Error occurred
+      'processing',         // Being processed (extracting, converting, packaging, validating)
+      'editing',            // User is editing in web editor (optional post-completion)
+      'completed',          // Done - outputs available immediately
+      'failed',             // Error occurred
+      'cancelled'           // Job was cancelled
     ],
     default: 'uploaded'
   },
