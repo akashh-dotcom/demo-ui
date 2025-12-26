@@ -531,8 +531,27 @@ const launchEditor = async (req, res) => {
       editorUrl = result.editor_url;
     } else if (file.externalService === 'epub') {
       // EPUB uses separate editor service
-      // First need to get the output package path from job result
+      // Get the public URL for browser access
       editorUrl = epubApiService.getEditorUrl();
+
+      // Log the URL for debugging
+      console.log('EPUB Editor URLs:');
+      console.log('  - Internal (EPUB_EDITOR_URL):', process.env.EPUB_EDITOR_URL || 'not set');
+      console.log('  - Public (EPUB_EDITOR_PUBLIC_URL):', process.env.EPUB_EDITOR_PUBLIC_URL || 'not set');
+      console.log('  - Returned URL:', editorUrl);
+
+      // Try to load the package into the editor using the job ID
+      try {
+        // The EPUB API should have the output package path
+        const jobStatus = await epubApiService.getJobStatus(file.externalJobId);
+        if (jobStatus.output_path) {
+          console.log('Loading EPUB package into editor:', jobStatus.output_path);
+          await epubApiService.loadPackageInEditor(jobStatus.output_path);
+        }
+      } catch (loadError) {
+        console.log('Could not pre-load package into editor:', loadError.message);
+        // Continue anyway - user may need to load manually
+      }
     } else {
       return res.status(400).json({
         success: false,
