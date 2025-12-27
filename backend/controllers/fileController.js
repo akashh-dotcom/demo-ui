@@ -556,27 +556,38 @@ const launchEditor = async (req, res) => {
       const result = await pdfApiService.launchEditor(file.externalJobId);
       editorUrl = result.editor_url;
     } else if (file.externalService === 'epub') {
-      // EPUB uses separate editor service
+      // EPUB uses separate editor service with URL query parameters
       // Get the public URL for browser access
-      editorUrl = epubApiService.getEditorUrl();
+      const baseEditorUrl = epubApiService.getEditorUrl();
 
       // Log the URL for debugging
       console.log('EPUB Editor URLs:');
       console.log('  - Internal (EPUB_EDITOR_URL):', process.env.EPUB_EDITOR_URL || 'not set');
       console.log('  - Public (EPUB_EDITOR_PUBLIC_URL):', process.env.EPUB_EDITOR_PUBLIC_URL || 'not set');
-      console.log('  - Returned URL:', editorUrl);
+      console.log('  - Base URL:', baseEditorUrl);
 
-      // Try to load the package into the editor using the job ID
+      // Get the output package path from job status
       try {
-        // The EPUB API should have the output package path
         const jobStatus = await epubApiService.getJobStatus(file.externalJobId);
+
         if (jobStatus.output_path) {
-          console.log('Loading EPUB package into editor:', jobStatus.output_path);
-          await epubApiService.loadPackageInEditor(jobStatus.output_path);
+          // Build URL with query parameters
+          // The package path must be the path inside the Docker container
+          const editorUrlObj = new URL(baseEditorUrl);
+          editorUrlObj.searchParams.set('package', jobStatus.output_path);
+          editorUrlObj.searchParams.set('jobId', file._id.toString());
+
+          editorUrl = editorUrlObj.toString();
+          console.log('EPUB Editor URL with package:', editorUrl);
+        } else {
+          // Fallback to base URL if no output path
+          console.log('No output_path found in job status, using base editor URL');
+          editorUrl = baseEditorUrl;
         }
-      } catch (loadError) {
-        console.log('Could not pre-load package into editor:', loadError.message);
-        // Continue anyway - user may need to load manually
+      } catch (jobError) {
+        console.log('Could not get job status for editor URL:', jobError.message);
+        // Fallback to base URL
+        editorUrl = baseEditorUrl;
       }
     } else {
       return res.status(400).json({
