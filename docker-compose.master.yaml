@@ -114,6 +114,8 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # PDF Editor configuration
       PDFTOXML_EDITOR_PORT_START: 5100
+      # Webhook URL for notifying demo-ui when conversion completes
+      PDFTOXML_WEBHOOK_URL: http://backend:5000/api/files/webhook/complete
     ports:
       - "8000:8000"
       - "5100:5100"  # PDF Editor port
@@ -139,6 +141,8 @@ services:
     environment:
       PORT: 5001
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/RittenhouseXMLConverter}
+      # Webhook URL for notifying demo-ui when conversion completes
+      EPUB_WEBHOOK_URL: http://backend:5000/api/files/webhook/complete
     ports:
       - "5001:5001"
     volumes:
