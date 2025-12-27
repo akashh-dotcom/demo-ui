@@ -115,7 +115,7 @@ services:
       # PDF Editor configuration
       PDFTOXML_EDITOR_PORT_START: 5100
       # Webhook URL for notifying demo-ui when conversion completes
-      PDFTOXML_WEBHOOK_URL: http://backend:5000/api/files/webhook/complete
+      PDFTOXML_WEBHOOK_URL: http://ritt-backend:5000/api/files/webhook/complete
     ports:
       - "8000:8000"
       - "5100:5100"  # PDF Editor port
@@ -143,11 +143,11 @@ services:
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/RittenhouseXMLConverter}
       # Webhook URL for notifying demo-ui when conversion completes
       # Try multiple variable names to match what RittDocConverter expects
-      EPUB_WEBHOOK_URL: http://backend:5000/api/files/webhook/complete
-      WEBHOOK_URL: http://backend:5000/api/files/webhook/complete
-      UI_WEBHOOK_URL: http://backend:5000/api/files/webhook/complete
-      DEMO_UI_BACKEND_URL: http://backend:5000
-      DEMO_UI_BACKEND_HOST: backend
+      EPUB_WEBHOOK_URL: http://ritt-backend:5000/api/files/webhook/complete
+      WEBHOOK_URL: http://ritt-backend:5000/api/files/webhook/complete
+      UI_WEBHOOK_URL: http://ritt-backend:5000/api/files/webhook/complete
+      DEMO_UI_BACKEND_URL: http://ritt-backend:5000
+      DEMO_UI_BACKEND_HOST: ritt-backend
       DEMO_UI_BACKEND_PORT: "5000"
     ports:
       - "5001:5001"
