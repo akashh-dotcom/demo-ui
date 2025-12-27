@@ -26,6 +26,34 @@ const {
 // Feature flag: use external APIs (set to true to enable)
 const USE_EXTERNAL_APIS = process.env.USE_EXTERNAL_APIS === 'true';
 
+// Docker internal URLs for API services (used when running in containers)
+const PDF_API_INTERNAL_URL = process.env.PDFTOXML_API_URL || 'http://pdf-api:8000';
+const EPUB_API_INTERNAL_URL = process.env.EPUB_API_URL || 'http://epub-api:5001';
+
+/**
+ * Convert external/localhost URLs to Docker internal URLs
+ * Webhook payloads may contain localhost URLs that don't work inside Docker containers
+ */
+function convertToInternalUrl(url) {
+  if (!url) return url;
+
+  // Replace localhost:8000 with PDF API internal URL
+  if (url.includes('localhost:8000') || url.includes('127.0.0.1:8000')) {
+    return url
+      .replace('http://localhost:8000', PDF_API_INTERNAL_URL)
+      .replace('http://127.0.0.1:8000', PDF_API_INTERNAL_URL);
+  }
+
+  // Replace localhost:5001 with EPUB API internal URL
+  if (url.includes('localhost:5001') || url.includes('127.0.0.1:5001')) {
+    return url
+      .replace('http://localhost:5001', EPUB_API_INTERNAL_URL)
+      .replace('http://127.0.0.1:5001', EPUB_API_INTERNAL_URL);
+  }
+
+  return url;
+}
+
 // @desc    Upload and process file
 // @route   POST /api/files/upload
 // @access  Private
@@ -1263,8 +1291,12 @@ const webhookComplete = async (req, res) => {
 
             // Download from the provided URL or construct from API
             if (outputFile.downloadUrl) {
+              // Convert localhost URL to Docker internal URL
+              const internalUrl = convertToInternalUrl(outputFile.downloadUrl);
+              console.log(`Downloading from: ${internalUrl}`);
+
               // Download directly from provided URL
-              const response = await fetch(outputFile.downloadUrl);
+              const response = await fetch(internalUrl);
               if (response.ok) {
                 const buffer = await response.arrayBuffer();
                 fs.writeFileSync(localPath, Buffer.from(buffer));
@@ -1327,8 +1359,9 @@ const webhookComplete = async (req, res) => {
 
         // Download package - use downloadUrls if provided, otherwise fallback to epubApiService
         if (downloadUrls?.package) {
-          console.log(`Downloading EPUB package from: ${downloadUrls.package}`);
-          const response = await fetch(downloadUrls.package);
+          const packageUrl = convertToInternalUrl(downloadUrls.package);
+          console.log(`Downloading EPUB package from: ${packageUrl}`);
+          const response = await fetch(packageUrl);
           if (response.ok) {
             const buffer = await response.arrayBuffer();
             fs.writeFileSync(zipPath, Buffer.from(buffer));
@@ -1357,8 +1390,9 @@ const webhookComplete = async (req, res) => {
             : `${baseNameForReport}_validation_report.xlsx`;
           const reportPath = path.join(outputDir, reportFileName);
 
-          console.log(`Downloading EPUB validation report from: ${downloadUrls.report}`);
-          const reportResponse = await fetch(downloadUrls.report);
+          const reportUrl = convertToInternalUrl(downloadUrls.report);
+          console.log(`Downloading EPUB validation report from: ${reportUrl}`);
+          const reportResponse = await fetch(reportUrl);
           if (reportResponse.ok) {
             const buffer = await reportResponse.arrayBuffer();
             fs.writeFileSync(reportPath, Buffer.from(buffer));
