@@ -55,6 +55,11 @@ const uploadManuscript = useCallback(
         formData.append('outputFolderPath', options.outputFolderPath);
       }
 
+      // Add optional metadata file for PDF conversions (CSV or ONIX XML)
+      if (options.metadataFile) {
+        formData.append('metadataFile', options.metadataFile);
+      }
+
       const manuscriptId = `temp-${Date.now()}`;
 
       // Upload with progress tracking and 5-minute timeout

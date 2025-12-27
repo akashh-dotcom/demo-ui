@@ -287,6 +287,61 @@ async function downloadFile(jobId, filename, destPath) {
 }
 
 /**
+ * Upload metadata file for a job (CSV or ONIX XML)
+ *
+ * @param {string} jobId - The job ID
+ * @param {string} filePath - Path to the metadata file
+ * @returns {Object} Upload result with metadata info
+ */
+async function uploadMetadata(jobId, filePath) {
+  const formData = new FormData();
+
+  // Determine content type based on file extension
+  const ext = path.extname(filePath).toLowerCase();
+  let contentType = 'application/octet-stream';
+  if (ext === '.csv') {
+    contentType = 'text/csv';
+  } else if (ext === '.xml') {
+    contentType = 'application/xml';
+  }
+
+  formData.append('file', fs.createReadStream(filePath), {
+    filename: path.basename(filePath),
+    contentType: contentType
+  });
+
+  try {
+    const response = await axios.post(
+      `${PDF_API_URL}/api/v1/jobs/${jobId}/metadata`,
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders()
+        },
+        timeout: PDF_API_TIMEOUT
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    if (error.response) {
+      throw new Error(`Metadata upload failed: ${JSON.stringify(error.response.data)}`);
+    }
+    throw new Error(`Metadata upload failed: ${error.message}`);
+  }
+}
+
+/**
+ * Get metadata for a job
+ *
+ * @param {string} jobId - The job ID
+ * @returns {Object} Metadata info
+ */
+async function getMetadata(jobId) {
+  return await apiRequest(`/jobs/${jobId}/metadata`);
+}
+
+/**
  * Get dashboard statistics
  */
 async function getDashboardStats() {
@@ -349,6 +404,10 @@ module.exports = {
   listOutputFiles,
   getDownloadUrl,
   downloadFile,
+
+  // Metadata
+  uploadMetadata,
+  getMetadata,
 
   // Dashboard
   getDashboardStats,

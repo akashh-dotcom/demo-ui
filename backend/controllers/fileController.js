@@ -59,12 +59,17 @@ function convertToInternalUrl(url) {
 // @access  Private
 const uploadFile = async (req, res) => {
   let tempFilePath = null;
+  let metadataFilePath = null;
   try {
-    if (!req.file) {
+    // Handle both single file (req.file) and multi-file (req.files) uploads
+    const mainFile = req.files?.file?.[0] || req.file;
+    const metadataFile = req.files?.metadataFile?.[0];
+
+    if (!mainFile) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const { originalname, filename, path: filePath, size, mimetype } = req.file;
+    const { originalname, filename, path: filePath, size, mimetype } = mainFile;
     const fileType = path.extname(originalname).toLowerCase().replace('.', '');
     tempFilePath = filePath;
 
@@ -76,8 +81,14 @@ const uploadFile = async (req, res) => {
       console.log(`Output folder path specified: ${outputFolderPath}`);
     }
 
+    // Handle optional metadata file (for PDF conversions)
+    if (metadataFile) {
+      metadataFilePath = metadataFile.path;
+      console.log(`Metadata file provided: ${metadataFile.originalname}`);
+    }
+
     // Upload file to GridFS
-    const gridfsResult = await uploadFileToGridFS(req.file, {
+    const gridfsResult = await uploadFileToGridFS(mainFile, {
       uploadedBy: req.user._id,
       fileType: fileType
     });
@@ -99,15 +110,19 @@ const uploadFile = async (req, res) => {
       status: 'uploaded'
     });
 
-    // Clean up temporary uploaded file
+    // Clean up temporary uploaded file (keep metadata file for processing)
     await cleanupFile(tempFilePath);
     console.log(`Cleaned up temporary file: ${tempFilePath}`);
 
     // Start async processing (don't wait for it to complete)
     if (USE_EXTERNAL_APIS) {
-      processFileWithExternalApi(file);
+      processFileWithExternalApi(file, metadataFilePath);
     } else {
       processFileAsync(file);  // Legacy local processing
+      // Clean up metadata file if not used
+      if (metadataFilePath) {
+        await cleanupFile(metadataFilePath);
+      }
     }
 
     // Return immediate response - processing will continue in background
@@ -117,9 +132,12 @@ const uploadFile = async (req, res) => {
       data: { file }
     });
   } catch (error) {
-    // Clean up temporary file in case of error
+    // Clean up temporary files in case of error
     if (tempFilePath) {
       await cleanupFile(tempFilePath);
+    }
+    if (metadataFilePath) {
+      await cleanupFile(metadataFilePath);
     }
 
     res.status(500).json({
@@ -278,7 +296,9 @@ const processFileAsync = async (file) => {
 };
 
 // @desc    Process file using external PDF/EPUB APIs
-const processFileWithExternalApi = async (file) => {
+// @param   file - File document from MongoDB
+// @param   metadataFilePath - Optional path to metadata file (CSV or ONIX XML) for PDF conversions
+const processFileWithExternalApi = async (file, metadataFilePath = null) => {
   let tempInputPath = null;
 
   try {
@@ -313,11 +333,39 @@ const processFileWithExternalApi = async (file) => {
       apiService = pdfApiService;
       externalService = 'pdf';
       job = await pdfApiService.startConversion(tempInputPath, {});
+
+      // Upload optional metadata file after job is created
+      if (metadataFilePath) {
+        try {
+          console.log(`Uploading metadata file for job ${job.job_id}`);
+          const metadataResult = await pdfApiService.uploadMetadata(job.job_id, metadataFilePath);
+          console.log(`Metadata uploaded successfully:`, metadataResult);
+
+          // Store metadata info in file record
+          file.conversionMetadata = {
+            ...file.conversionMetadata,
+            hasMetadataFile: true,
+            metadataFormat: metadataResult.format || 'unknown'
+          };
+        } catch (metadataError) {
+          console.error('Failed to upload metadata file:', metadataError.message);
+          // Don't fail the conversion if metadata upload fails
+        } finally {
+          // Clean up metadata file
+          await cleanupFile(metadataFilePath);
+        }
+      }
     } else if (file.fileType === 'epub') {
       console.log(`Sending EPUB to external EPUB API: ${file.originalName}`);
       apiService = epubApiService;
       externalService = 'epub';
       job = await epubApiService.startConversion(tempInputPath, {});
+
+      // Clean up metadata file if provided for EPUB (not supported)
+      if (metadataFilePath) {
+        console.log('Metadata files are not supported for EPUB conversions');
+        await cleanupFile(metadataFilePath);
+      }
     } else {
       throw new Error(`Unsupported file type: ${file.fileType}`);
     }

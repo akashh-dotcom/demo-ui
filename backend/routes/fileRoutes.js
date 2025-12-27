@@ -24,8 +24,11 @@ router.post('/webhook/complete', webhookComplete);
 // All other routes require authentication
 router.use(authenticate);
 
-// File upload route
-router.post('/upload', upload.single('file'), handleMulterError, uploadFile);
+// File upload route - accepts main file and optional metadata file
+router.post('/upload', upload.fields([
+  { name: 'file', maxCount: 1 },
+  { name: 'metadataFile', maxCount: 1 }
+]), handleMulterError, uploadFile);
 
 // Get user's files
 router.get('/', getUserFiles);

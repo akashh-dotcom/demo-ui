@@ -47,6 +47,7 @@ export const Manuscripts = () => {
   const [finalizingFile, setFinalizingFile] = useState(null);
   const [outputFolderPath, setOutputFolderPath] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [metadataFile, setMetadataFile] = useState(null);
   const hasLoadedInitially = useRef(false);
 
   // Initial load - ONLY ONCE
@@ -82,9 +83,13 @@ export const Manuscripts = () => {
       if (outputFolderPath) {
         console.log('📁 Output folder:', outputFolderPath);
       }
+      if (metadataFile) {
+        console.log('📋 Metadata file:', metadataFile.name);
+      }
 
       const result = await uploadManuscript(selectedFile, {
-        outputFolderPath: outputFolderPath || undefined
+        outputFolderPath: outputFolderPath || undefined,
+        metadataFile: metadataFile || undefined
       });
 
       console.log('✓ Upload result:', result);
@@ -100,6 +105,7 @@ export const Manuscripts = () => {
 
       setShowUploadModal(false);
       setSelectedFile(null);
+      setMetadataFile(null);
       setOutputFolderPath('');
 
     } catch (error) {
@@ -878,6 +884,54 @@ export const Manuscripts = () => {
                           Output files will be saved to a subfolder named with the ISBN number
                         </p>
                       </div>
+
+                      {/* Metadata File Input - Only for PDF files */}
+                      {selectedFile?.name?.toLowerCase().endsWith('.pdf') && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <div className="flex items-center gap-2">
+                              <FileSpreadsheet size={16} />
+                              Metadata File (Optional)
+                            </div>
+                          </label>
+                          {!metadataFile ? (
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept=".csv,.xml"
+                                onChange={(e) => {
+                                  if (e.target.files?.[0]) {
+                                    setMetadataFile(e.target.files[0]);
+                                  }
+                                }}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                style={{ '--tw-ring-color': '#6890b8' }}
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                Upload a CSV or ONIX XML file with book metadata (ISBN, title, authors, publisher)
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <FileSpreadsheet size={18} className="text-amber-600" />
+                                  <span className="text-sm font-medium text-amber-800">{metadataFile.name}</span>
+                                  <span className="text-xs text-amber-600">
+                                    ({(metadataFile.size / 1024).toFixed(1)} KB)
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => setMetadataFile(null)}
+                                  className="p-1 hover:bg-amber-100 rounded-full transition-colors"
+                                >
+                                  <X size={16} className="text-amber-600" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -887,6 +941,7 @@ export const Manuscripts = () => {
                       onClick={() => {
                         setShowUploadModal(false);
                         setSelectedFile(null);
+                        setMetadataFile(null);
                         setOutputFolderPath('');
                       }}
                       className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-all"
