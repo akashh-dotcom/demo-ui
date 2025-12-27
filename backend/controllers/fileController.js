@@ -360,12 +360,14 @@ const processFileWithExternalApi = async (file) => {
         // Try to get ISBN from job metadata for better naming
         let zipFileName;
         const isbn = completedJob.metadata?.isbn || completedJob.isbn;
-        if (isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)) {
-          // Clean ISBN (remove hyphens) and use as filename
-          zipFileName = `${isbn.replace(/-/g, '')}.zip`;
+        const cleanIsbn = isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)
+          ? isbn.replace(/-/g, '')
+          : null;
+        const baseName = file.originalName.replace(/\.epub$/i, '');
+
+        if (cleanIsbn) {
+          zipFileName = `${cleanIsbn}.zip`;
         } else {
-          // Fall back to original filename (case-insensitive extension removal)
-          const baseName = file.originalName.replace(/\.epub$/i, '');
           zipFileName = `${baseName}_output.zip`;
         }
         const zipPath = path.join(outputDir, zipFileName);
@@ -375,14 +377,32 @@ const processFileWithExternalApi = async (file) => {
           filePath: zipPath,
           fileName: path.basename(zipPath),
           fileType: 'zip',
-          fileSize: stats.size
+          fileSize: stats.size,
+          downloadType: 'rittdoc_package'
         });
 
+        // Download validation report (XLSX)
+        const reportFileName = cleanIsbn
+          ? `${cleanIsbn}_validation_report.xlsx`
+          : `${baseName}_validation_report.xlsx`;
+        const reportPath = path.join(outputDir, reportFileName);
+        const reportResult = await epubApiService.downloadReport(job.job_id, reportPath);
+        if (reportResult) {
+          outputFiles.push({
+            filePath: reportPath,
+            fileName: reportFileName,
+            fileType: 'xlsx',
+            fileSize: reportResult.size,
+            downloadType: 'validation_report'
+          });
+          console.log(`Downloaded EPUB validation report: ${reportFileName}`);
+        }
+
         // Store ISBN in conversion metadata if available
-        if (isbn && isbn !== 'UNKNOWN') {
+        if (cleanIsbn) {
           file.conversionMetadata = {
             ...file.conversionMetadata,
-            isbn: isbn.replace(/-/g, '')
+            isbn: cleanIsbn
           };
         }
       }
@@ -404,6 +424,7 @@ const processFileWithExternalApi = async (file) => {
         filePath: null,
         fileType: f.fileType,
         fileSize: f.fileSize,
+        downloadType: f.downloadType,
         gridfsFileId: gridfsFiles[index].fileId,
         storedInGridFS: true
       }));
@@ -651,16 +672,13 @@ const finalizeFile = async (req, res) => {
 
       // Download the result ZIP
       // Try to get ISBN from existing metadata for naming
-      let zipFileName;
       const isbn = file.conversionMetadata?.isbn;
-      if (isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)) {
-        zipFileName = `${isbn.replace(/-/g, '')}.zip`;
-      } else {
-        // Case-insensitive extension removal
-        const baseName = file.originalName.replace(/\.epub$/i, '');
-        zipFileName = `${baseName}_output.zip`;
-      }
+      const cleanIsbn = isbn && isbn !== 'UNKNOWN' && isbn.match(/^[\d-X]+$/)
+        ? isbn.replace(/-/g, '')
+        : null;
+      const baseName = file.originalName.replace(/\.epub$/i, '');
 
+      const zipFileName = cleanIsbn ? `${cleanIsbn}.zip` : `${baseName}_output.zip`;
       const zipPath = path.join(outputDir, zipFileName);
       await epubApiService.downloadResult(file.externalJobId, zipPath);
       const stats = fs.statSync(zipPath);
@@ -669,8 +687,26 @@ const finalizeFile = async (req, res) => {
         filePath: zipPath,
         fileName: path.basename(zipPath),
         fileType: 'zip',
-        fileSize: stats.size
+        fileSize: stats.size,
+        downloadType: 'rittdoc_package'
       });
+
+      // Download validation report (XLSX)
+      const reportFileName = cleanIsbn
+        ? `${cleanIsbn}_validation_report.xlsx`
+        : `${baseName}_validation_report.xlsx`;
+      const reportPath = path.join(outputDir, reportFileName);
+      const reportResult = await epubApiService.downloadReport(file.externalJobId, reportPath);
+      if (reportResult) {
+        outputFiles.push({
+          filePath: reportPath,
+          fileName: reportFileName,
+          fileType: 'xlsx',
+          fileSize: reportResult.size,
+          downloadType: 'validation_report'
+        });
+        console.log(`Downloaded EPUB validation report: ${reportFileName}`);
+      }
 
     } else {
       throw new Error(`Unsupported external service: ${file.externalService}`);
@@ -688,6 +724,7 @@ const finalizeFile = async (req, res) => {
       filePath: null,
       fileType: f.fileType,
       fileSize: f.fileSize,
+      downloadType: f.downloadType,
       gridfsFileId: gridfsFiles[index].fileId,
       storedInGridFS: true
     }));

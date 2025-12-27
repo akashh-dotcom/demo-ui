@@ -312,6 +312,39 @@ async function downloadResult(jobId, destPath) {
   };
 }
 
+/**
+ * Download validation report to local path
+ *
+ * @param {string} jobId - The job ID
+ * @param {string} destPath - Local destination path
+ * @returns {Object|null} Download info or null if report not available
+ */
+async function downloadReport(jobId, destPath) {
+  try {
+    const response = await fetch(getReportDownloadUrl(jobId));
+
+    if (!response.ok) {
+      // Report might not exist for all jobs
+      if (response.status === 404) {
+        console.log(`No validation report available for job ${jobId}`);
+        return null;
+      }
+      throw new Error(`Failed to download report: ${response.status}`);
+    }
+
+    const buffer = await response.arrayBuffer();
+    fs.writeFileSync(destPath, Buffer.from(buffer));
+
+    return {
+      path: destPath,
+      size: buffer.byteLength
+    };
+  } catch (error) {
+    console.log(`Could not download validation report: ${error.message}`);
+    return null;
+  }
+}
+
 // ============================================
 // Editor Functions (runs on separate port)
 // ============================================
@@ -561,6 +594,7 @@ module.exports = {
   getDownloadUrl,
   getReportDownloadUrl,
   downloadResult,
+  downloadReport,
 
   // Editor (separate service)
   loadPackageInEditor,
