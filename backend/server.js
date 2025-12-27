@@ -76,10 +76,18 @@ const userRoutes = require('./routes/userRoutes');
 const fileRoutes = require('./routes/fileRoutes');
 const configRoutes = require('./routes/configRoutes');
 
+// Import webhook handler for route alias
+const { webhookComplete } = require('./controllers/fileController');
+
 // API Routes
 app.use('/api/users', userRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/config', configRoutes);
+
+// Webhook route alias for EPUB editor compatibility
+// EPUB editor calls POST /api/webhook/conversion-complete
+// This forwards to the same handler as /api/files/webhook/complete
+app.post('/api/webhook/conversion-complete', webhookComplete);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

@@ -141,14 +141,10 @@ services:
     environment:
       PORT: 5001
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/RittenhouseXMLConverter}
-      # Webhook URL for notifying demo-ui when conversion completes
-      # Try multiple variable names to match what RittDocConverter expects
-      EPUB_WEBHOOK_URL: http://ritt-backend:5000/api/files/webhook/complete
-      WEBHOOK_URL: http://ritt-backend:5000/api/files/webhook/complete
-      UI_WEBHOOK_URL: http://ritt-backend:5000/api/files/webhook/complete
-      DEMO_UI_BACKEND_URL: http://ritt-backend:5000
-      DEMO_UI_BACKEND_HOST: ritt-backend
-      DEMO_UI_BACKEND_PORT: "5000"
+      # Webhook configuration for EPUB editor (Save & Process)
+      UI_BACKEND_URL: http://ritt-backend:5000
+      WEBHOOK_ENDPOINT: /api/webhook/conversion-complete
+      API_SERVER_URL: http://epub-api:5001
     ports:
       - "5001:5001"
     volumes:
