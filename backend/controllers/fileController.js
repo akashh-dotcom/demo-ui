@@ -359,7 +359,8 @@ const processFileWithExternalApi = async (file, metadataFilePath = null) => {
       console.log(`Sending EPUB to external EPUB API: ${file.originalName}`);
       apiService = epubApiService;
       externalService = 'epub';
-      job = await epubApiService.startConversion(tempInputPath, {});
+      // Pass file._id so EPUB API uses it as job_id for webhook correlation
+      job = await epubApiService.startConversion(tempInputPath, {}, file._id.toString());
 
       // Clean up metadata file if provided for EPUB (not supported)
       if (metadataFilePath) {

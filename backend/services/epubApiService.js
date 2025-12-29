@@ -141,9 +141,10 @@ async function updateConfig(config) {
  *
  * @param {string} filePath - Path to the EPUB file
  * @param {Object} config - Conversion configuration options
+ * @param {string} fileId - Optional UI file ID to use as job_id for webhook correlation
  * @returns {Object} Job object with job_id
  */
-async function startConversion(filePath, config = {}) {
+async function startConversion(filePath, config = {}, fileId = null) {
   const formData = new FormData();
 
   // Add the file
@@ -151,6 +152,11 @@ async function startConversion(filePath, config = {}) {
     filename: path.basename(filePath),
     contentType: 'application/epub+zip'
   });
+
+  // Pass UI's file ID as job_id for webhook correlation
+  if (fileId) {
+    formData.append('job_id', fileId);
+  }
 
   // Add configuration options if any
   Object.entries(config).forEach(([key, value]) => {
