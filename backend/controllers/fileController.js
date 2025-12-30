@@ -1354,8 +1354,13 @@ const webhookComplete = async (req, res) => {
                 continue;
               }
             } else {
-              // Fall back to API download
-              await pdfApiService.downloadFile(jobId, outputFile.name, localPath);
+              // Fall back to API download - skip if file doesn't exist
+              try {
+                await pdfApiService.downloadFile(jobId, outputFile.name, localPath);
+              } catch (downloadError) {
+                console.error(`Failed to download ${outputFile.name}: ${downloadError.message}`);
+                continue;
+              }
             }
 
             const stats = fs.statSync(localPath);
@@ -1376,7 +1381,14 @@ const webhookComplete = async (req, res) => {
             if (!fs.existsSync(localDir)) {
               fs.mkdirSync(localDir, { recursive: true });
             }
-            await pdfApiService.downloadFile(jobId, outputFile.name, localPath);
+
+            // Try to download - skip if file doesn't exist (e.g., original input PDF)
+            try {
+              await pdfApiService.downloadFile(jobId, outputFile.name, localPath);
+            } catch (downloadError) {
+              console.error(`Failed to download ${outputFile.name}: ${downloadError.message}`);
+              continue;
+            }
 
             // Determine download type based on filename
             let downloadType = null;
