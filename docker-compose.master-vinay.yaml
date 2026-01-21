@@ -1,0 +1,143 @@
+version: "3.9"
+
+services:
+  # ===============================
+  # MongoDB (Optional - Local)
+  # ===============================
+  mongodb:
+    image: mongo:6.0
+    container_name: ritt-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - ritt-network
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ===============================
+  # Backend (Node.js)
+  # ===============================
+  backend:
+    build:
+      context: ./backend
+    container_name: ritt-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      MONGODB_URI: mongodb+srv://ritt_admin:rittdbuser@cluster0.lk4msmt.mongodb.net/RittenhouseXMLConverter
+      JWT_SECRET: your_super_secret_jwt_key_change_this_in_production
+
+      FRONTEND_URL: http://localhost
+      PDF_API_URL: http://localhost/pdf
+      EPUB_API_URL: http://localhost/epub
+      EPUB_EDITOR_URL: http://localhost/epub-editor
+      EPUB_EDITOR_PUBLIC_URL: http://localhost/epub-editor
+
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend/uploads:/usr/src/app/uploads
+      - ./backend/outputs:/usr/src/app/outputs
+    depends_on:
+      - pdf-api
+      - epub-api
+    networks:
+      - ritt-network
+
+  # ===============================
+  # Frontend (React / Vite)
+  # ===============================
+  frontend:
+    build:
+      context: ./frontend
+    container_name: ritt-frontend
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: /api
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - ritt-network
+
+  # ===============================
+  # PDF API
+  # ===============================
+  pdf-api:
+    build:
+      context: ../PDFtoXMLUsingExcel
+    container_name: ritt-pdf-api
+    restart: unless-stopped
+    environment:
+      PORT: 8000
+      MONGODB_URI: mongodb+srv://ritt_admin:rittdbuser@cluster0.lk4msmt.mongodb.net/RittenhouseXMLConverter
+      PDFTOXML_WEBHOOK_URL: http://localhost/api/files/webhook/complete
+    ports:
+      - "8000:8000"
+      - "5100:5100"
+    volumes:
+      - pdf-uploads:/app/uploads
+      - pdf-outputs:/app/outputs
+    networks:
+      - ritt-network
+
+  # ===============================
+  # EPUB API
+  # ===============================
+  epub-api:
+    build:
+      context: ../RittDocConverter
+    container_name: ritt-epub-api
+    restart: unless-stopped
+    environment:
+      PORT: 5001
+      MONGODB_URI: mongodb+srv://ritt_admin:rittdbuser@cluster0.lk4msmt.mongodb.net/RittenhouseXMLConverter
+      UI_BACKEND_URL: http://localhost
+    ports:
+      - "5001:5001"
+    volumes:
+      - epub-uploads:/app/uploads
+      - epub-outputs:/app/outputs
+    networks:
+      - ritt-network
+
+  # ===============================
+  # EPUB Editor
+  # ===============================
+  epub-editor:
+    build:
+      context: ../RittDocConverter/editor
+    container_name: ritt-epub-editor
+    restart: unless-stopped
+    environment:
+      PORT: 5000
+    ports:
+      - "5002:5000"
+    networks:
+      - ritt-network
+
+# ===============================
+# Network
+# ===============================
+networks:
+  ritt-network:
+    driver: bridge
+
+# ===============================
+# Volumes
+# ===============================
+volumes:
+  mongodb-data:
+  pdf-uploads:
+  pdf-outputs:
+  epub-uploads:
+  epub-outputs:

@@ -1,0 +1,43 @@
+sudo apt update
+sudo apt install docker.io docker-compose nginx -y
+tar -xvf Rittenhouse_deployment.tar
+sudo apt update
+## installing for certbot
+sudo apt install snapd -y
+sudo snap install core
+sudo snap refresh core
+sudo snap install --classic certbot
+sudo ln -s /snap/bin/certbot /usr/bin/certbot
+certbot --version
+##Make it https
+sudo certbot --nginx \
+-d vinay.aws.darkclouds.online \
+-m vinaybv77716@gmail.com \
+--agree-tos \
+--no-eff-email
+
+
+sudo vi /etc/nginx/sites-enabled/default
+
+docker-compose -f docker-compose.master-vinay.yaml up -d # this will take 1 hr
+
+sudo docker exec -it ritt-frontend npm run build
+sudo rm -rf /var/www/html/*
+
+sudo docker cp ritt-frontend:/usr/src/app/dist/. /var/www/html/
+
+sudo systemctl restart nginx
+
+
+
+docker-compose -f docker-compose.master-vinay.yaml stop
+docker-compose -f docker-compose.master-vinay.yaml start
+
+
+
+
+
+
+
+
+
