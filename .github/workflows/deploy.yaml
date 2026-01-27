@@ -1,202 +1,272 @@
-# =============================================================================
-# CI/CD Pipeline - Deploy to EC2
-# =============================================================================
-# Triggers on push to main branch
-# Builds Docker images and deploys to EC2 via SSH
-# =============================================================================
-
-name: Deploy to EC2
-
+name: CI/CD Pipeline
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:  # Allow manual trigger
+    branches: [main]
+  pull_request:
+    types: [synchronize, opened, reopened, closed]
+    branches: [main]
+
+permissions:
+  id-token: write
+  contents: read
 
 env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  # Desired concurrent runners
+  WORKERS: 1
+  # Desired threads by runner
+  # Default Github actions Linux runners have 2 cores (https://docs.github.com/en/actions/using-github-hosted-runners/about-github-hosted-runners)
+  CONCURRENCY: 2
+
+# Cancel active previous workflows in the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
 
 jobs:
-  # ===========================================================================
-  # Job 1: Test
-  # ===========================================================================
-  test:
-    name: Run Tests
+# ============================================================================
+# Lint & Type Check
+# ============================================================================
+  lint:
+    name: Lint & Type Check
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
 
     steps:
-      - name: Checkout code
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install lint dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff mypy types-requests
+
+      - name: Run Ruff linter
+        run: ruff check . --output-format=github
+        continue-on-error: true
+
+      - name: Run Ruff formatter check
+        run: ruff format --check .
+        continue-on-error: true
+
+##################################################################
+# Build, Scan and Push Docker images to ECR
+##################################################################
+  build-scan-push-frontend:
+    runs-on: ubuntu-latest
+    needs: [lint]
+    if: github.event_name == 'pull_request'
+  
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+      AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  
+    steps:
+      - name: Checkout source code
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+  
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
-
-      - name: Install backend dependencies
-        working-directory: ./backend
-        run: npm ci
-
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm ci
-
-      - name: Run frontend tests
-        working-directory: ./frontend
-        run: npm test -- --run || true  # Continue even if no tests
-
-      - name: Lint check (optional)
-        working-directory: ./frontend
-        run: npm run lint || true
-
-  # ===========================================================================
-  # Job 2: Build and Push Docker Images
-  # ===========================================================================
-  build:
-    name: Build Docker Images
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+  
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION \
+          | docker login --username AWS --password-stdin \
+            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+  
+      - name: Set short image tag
+        run: |
+          echo "TAG=${IMAGE_TAG::7}" >> $GITHUB_ENV
+          echo "IMAGE_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/manuscript/frontend:${IMAGE_TAG::7}" >> $GITHUB_ENV
+  
+      - name: Build Frontend Docker image
+        run: |
+          docker build -t frontend:$TAG ./frontend
+          docker tag frontend:$TAG $IMAGE_URI
+  
+      - name: Trivy scan – Frontend image
+        uses: aquasecurity/trivy-action@0.22.0
+        with:
+          image-ref: ${{ env.IMAGE_URI }}
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: 0        # change to 1 if you want to fail on HIGH/CRITICAL
+          ignore-unfixed: true
+  
+      - name: Push Frontend image to ECR
+        run: |
+          docker push $IMAGE_URI
+################# Backend Image Workflow ##########################
+  build-scan-push-backend:
     runs-on: ubuntu-latest
-    needs: test
-    permissions:
-      contents: read
-      packages: write
-
-    outputs:
-      backend-image: ${{ steps.meta-backend.outputs.tags }}
-      frontend-image: ${{ steps.meta-frontend.outputs.tags }}
-
+    needs: [lint]
+    if: github.event_name == 'pull_request'
+  
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+      AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+  
     steps:
-      - name: Checkout code
+      - name: Checkout source code
         uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
+  
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Backend Image
-      - name: Extract metadata for backend
-        id: meta-backend
-        uses: docker/metadata-action@v5
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
+  
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION \
+          | docker login --username AWS --password-stdin \
+            $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
+  
+      - name: Set short image tag
+        run: |
+          echo "TAG=${IMAGE_TAG::7}" >> $GITHUB_ENV
+          echo "IMAGE_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/manuscript/backend:${IMAGE_TAG::7}" >> $GITHUB_ENV
+  
+      - name: Build Backend Docker image
+        run: |
+          docker build -t backend:$TAG ./backend
+          docker tag backend:$TAG $IMAGE_URI
+  
+      - name: Trivy scan – Backend image
+        uses: aquasecurity/trivy-action@0.22.0
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/backend
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
+          image-ref: ${{ env.IMAGE_URI }}
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: 0        # change to 1 if you want to fail on HIGH/CRITICAL
+          ignore-unfixed: true
+  
+      - name: Push Backend image to ECR
+        run: |
+          docker push $IMAGE_URI
 
-      - name: Build and push backend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./backend
-          file: ./backend/Dockerfile.prod
-          push: true
-          tags: ${{ steps.meta-backend.outputs.tags }}
-          labels: ${{ steps.meta-backend.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      # Frontend Image
-      - name: Extract metadata for frontend
-        id: meta-frontend
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}/frontend
-          tags: |
-            type=sha,prefix=
-            type=raw,value=latest
-
-      - name: Build and push frontend image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile.prod
-          push: true
-          tags: ${{ steps.meta-frontend.outputs.tags }}
-          labels: ${{ steps.meta-frontend.outputs.labels }}
-          build-args: |
-            VITE_API_URL=${{ secrets.VITE_API_URL }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  # ===========================================================================
-  # Job 3: Deploy to EC2
-  # ===========================================================================
-  deploy:
-    name: Deploy to EC2
+##################################################
+ # Update docker-compose repo with new image tags 
+##################################################    
+  update-compose-repo:
     runs-on: ubuntu-latest
-    needs: build
-    environment: production
+    needs: [lint,build-scan-push-frontend,build-scan-push-backend]
+    if: github.event_name == 'pull_request'
+
+    env:
+      IMAGE_TAG: ${{ github.sha }}
+      AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup SSH
+      - name: Checkout manuscript-apps repo
         run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/vinaybv77716/manuscript-apps.git
+          cd manuscript-apps
 
-      - name: Deploy to EC2
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
-          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+      - name: Update docker-compose image tags
         run: |
-          ssh $EC2_USER@$EC2_HOST << 'ENDSSH'
-            cd /opt/manuscript-processor
+          set -e
+          TAG=$(echo $IMAGE_TAG | cut -c1-7)
 
-            # Pull latest code
-            git pull origin main
+          cd manuscript-apps
+          # Update backend image
+          echo "✅ Updating backend image tag to $TAG"
+            sed -i \
+              "s|\${image}/backend:.*|\${image}/backend:$TAG|g" \
+              docker-compose.yaml
+            
+            sed -i \
+              "s|\${image}/frontend:.*|\${image}/frontend:$TAG|g" \
+              docker-compose.yaml
 
-            # Login to GitHub Container Registry
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Pull latest images
-            docker-compose -f docker-compose.prod.yaml pull
+          git status
 
-            # Restart services
-            docker-compose -f docker-compose.prod.yaml up -d --build
-
-            # Cleanup old images
-            docker image prune -f
-
-            # Show status
-            docker-compose -f docker-compose.prod.yaml ps
-          ENDSSH
-
-      - name: Health check
+      - name: Commit and push changes
         run: |
-          sleep 30
-          curl -f http://${{ secrets.EC2_HOST }}/health || echo "Health check endpoint not available yet"
+          cd manuscript-apps
 
-  # ===========================================================================
-  # Job 4: Notify (Optional)
-  # ===========================================================================
-  notify:
-    name: Send Notification
-    runs-on: ubuntu-latest
-    needs: deploy
-    if: always()
-
-    steps:
-      - name: Deployment Status
-        run: |
-          if [ "${{ needs.deploy.result }}" == "success" ]; then
-            echo "✅ Deployment successful!"
-          else
-            echo "❌ Deployment failed!"
+          if git diff --quiet; then
+            echo "⏭️ No changes to commit"
+            exit 0
           fi
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add .
+          git commit -m "Update docker image tags to ${{ github.sha }}"
+          git push origin main
+        
+# ============================================================================
+# CD will start from here after PR is merged
+# ============================================================================
+
+  deploy:
+   name: SSH into EC2 and Deploy
+   if: github.event.pull_request.merged == true
+   runs-on: ubuntu-latest
+   needs: [update-compose-repo]
+
+   env:
+     IMAGE_TAG: ${{ github.sha }}
+     AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+     AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+
+   steps:
+     - name: Checkout workflow repo
+       uses: actions/checkout@v4
+
+     - name: Setup SSH
+       run: |
+         mkdir -p ~/.ssh
+         echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_ed25519
+         chmod 600 ~/.ssh/id_ed25519
+         ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+     - name: Clone or update repo on EC2
+       run: |
+         ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+         "set -e && \
+          cd /home/ubuntu && \
+          if [ ! -d manuscript-apps ]; then \
+            git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/vinaybv77716/manuscript-apps.git; \
+          else \
+            cd manuscript-apps && git pull origin main; \
+          fi"
+
+     - name: ECR login, pull images, and deploy on EC2
+       run: |
+         ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+         "set -e && \
+          aws ecr get-login-password --region $AWS_REGION | \
+          docker login --username AWS --password-stdin \
+          $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com && \
+          cd /home/ubuntu/manuscript-apps && \
+          sudo chmod 644 export-secrets.sh && \
+          source /home/ubuntu/manuscript-apps/export-secrets.sh && \
+          docker-compose pull && \
+          docker-compose down && \
+          docker-compose up -d --build && \
+          docker image prune -a -f"
+
+     - name: Configure frontend nginx
+       run: |
+         ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} \
+         "set -e && \
+          cd /home/ubuntu/manuscript-apps && \
+          sudo docker exec ritt-frontend npm run build && \
+          sudo rm -rf /var/www/html/* && \
+          sudo docker cp ritt-frontend:/usr/src/app/dist/. /var/www/html/"
