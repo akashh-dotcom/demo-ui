@@ -63,7 +63,11 @@ const authorizeAdmin = (req, res, next) => {
   }
 };
 
+// Combined middleware: authenticate + admin check
+const isAdmin = [authenticate, authorizeAdmin];
+
 module.exports = {
   authenticate,
-  authorizeAdmin
+  authorizeAdmin,
+  isAdmin
 };

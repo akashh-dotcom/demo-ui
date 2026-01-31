@@ -20,21 +20,37 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter - only accept PDF and EPUB files
+// File filter - accept PDF, EPUB, and metadata files (CSV, XML)
 const fileFilter = (req, file, cb) => {
-  const allowedMimeTypes = [
-    'application/pdf',
-    'application/epub+zip',
-    'application/epub'
-  ];
-
   const ext = path.extname(file.originalname).toLowerCase();
-  const allowedExtensions = ['.pdf', '.epub'];
 
-  if (allowedMimeTypes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type. Only PDF and EPUB files are allowed.'), false);
+  // Main file field - only PDF and EPUB
+  if (file.fieldname === 'file') {
+    const allowedMimeTypes = [
+      'application/pdf',
+      'application/epub+zip',
+      'application/epub'
+    ];
+    const allowedExtensions = ['.pdf', '.epub'];
+
+    if (allowedMimeTypes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF and EPUB files are allowed.'), false);
+    }
+  }
+  // Metadata file field - CSV or XML (ONIX)
+  else if (file.fieldname === 'metadataFile') {
+    const allowedExtensions = ['.csv', '.xml'];
+
+    if (allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid metadata file type. Only CSV and XML files are allowed.'), false);
+    }
+  }
+  else {
+    cb(new Error('Unexpected file field.'), false);
   }
 };
 

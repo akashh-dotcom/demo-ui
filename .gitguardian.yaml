@@ -1,0 +1,21 @@
+# GitGuardian Configuration
+# This file configures GitGuardian scanning for this repository
+
+version: 2
+
+# Paths to ignore during scanning
+paths-ignore:
+  # Environment example files contain placeholder credentials, not real secrets
+  - "**/**.env.example"
+  - "**/.env.example"
+
+# Known false positives or acknowledged secrets
+# The .env.example file contains placeholder email credentials for documentation
+# These are not real secrets - they are examples for developers to copy and configure
+secret:
+  ignored:
+    # Email placeholder in .env.example (not a real credential)
+    - match: "your-app-password-here"
+      reason: "Placeholder value in .env.example documentation"
+    - match: "your-email@example.com"
+      reason: "Placeholder value in .env.example documentation"

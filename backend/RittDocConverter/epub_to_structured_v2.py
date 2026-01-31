@@ -47,6 +47,14 @@ except ImportError:
     print("Warning: cairosvg not available. SVG images will be skipped.", file=sys.stderr)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Silence chatty third-party loggers
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("botocore").setLevel(logging.WARNING)
+logging.getLogger("s3transfer").setLevel(logging.WARNING)
+logging.getLogger("ebooklib").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 

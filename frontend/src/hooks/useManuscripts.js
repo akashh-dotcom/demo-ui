@@ -25,6 +25,10 @@ export const useManuscripts = () => {
         error_message: file.errorMessage,
         output_formats: file.outputFiles?.map(f => f.fileType) || [],
         output_files: file.outputFiles || [],
+        output_folder_path: file.outputFolderPath,
+        external_links: file.externalLinks,
+        conversion_metadata: file.conversionMetadata,
+        editor_url: file.editorUrl,
       }));
 
       setManuscripts(transformedFiles);
@@ -41,10 +45,20 @@ export const useManuscripts = () => {
   }, []);
 
 const uploadManuscript = useCallback(
-  async (file) => {
+  async (file, options = {}) => {
     try {
       const formData = new FormData();
       formData.append('file', file);
+
+      // Add output folder path if provided
+      if (options.outputFolderPath) {
+        formData.append('outputFolderPath', options.outputFolderPath);
+      }
+
+      // Add optional metadata file for PDF conversions (CSV or ONIX XML)
+      if (options.metadataFile) {
+        formData.append('metadataFile', options.metadataFile);
+      }
 
       const manuscriptId = `temp-${Date.now()}`;
 

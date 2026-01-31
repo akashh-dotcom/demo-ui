@@ -24,6 +24,11 @@ from typing import List, Set
 from lxml import etree
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+
+# Silence chatty third-party loggers
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 

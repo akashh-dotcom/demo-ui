@@ -231,6 +231,217 @@ export const deleteFile = async (fileId) => {
 };
 
 // ============================================
+// EDITOR / FINALIZE ENDPOINTS
+// ============================================
+
+/**
+ * Launch editor for a file
+ * @param {String} fileId - File ID
+ * @returns {Promise} - { editorUrl, status }
+ */
+export const launchEditor = async (fileId) => {
+  const response = await api.post(`/files/${fileId}/editor`);
+  return response.data;
+};
+
+/**
+ * Finalize a file after editing
+ * @param {String} fileId - File ID
+ * @returns {Promise} - { message, status }
+ */
+export const finalizeFile = async (fileId) => {
+  const response = await api.post(`/files/${fileId}/finalize`);
+  return response.data;
+};
+
+/**
+ * Get editor URL for a file that's currently being edited
+ * @param {String} fileId - File ID
+ * @returns {String|null} - Editor URL or null
+ */
+export const getEditorUrl = (fileId) => {
+  // This will be populated from the file data
+  return null;
+};
+
+// ============================================
+// EXTERNAL SERVICE CONFIG ENDPOINTS
+// ============================================
+
+/**
+ * Check health of external services
+ * @returns {Promise} - { pdf: {status}, epub: {status} }
+ */
+export const checkExternalServicesHealth = async () => {
+  const response = await api.get('/config/health');
+  return response.data;
+};
+
+/**
+ * Get aggregated dashboard from external services
+ * @returns {Promise} - { pdf: {...}, epub: {...}, combined: {...} }
+ */
+export const getExternalDashboard = async () => {
+  const response = await api.get('/config/dashboard');
+  return response.data;
+};
+
+/**
+ * Get PDF processing options
+ * @returns {Promise} - { outputFormats, processingModes, ... }
+ */
+export const getPdfOptions = async () => {
+  const response = await api.get('/config/pdf/options');
+  return response.data;
+};
+
+/**
+ * Get EPUB config schema
+ * @returns {Promise} - { outputFormats, chapterSplitOptions, ... }
+ */
+export const getEpubSchema = async () => {
+  const response = await api.get('/config/epub/schema');
+  return response.data;
+};
+
+/**
+ * Get EPUB publishers
+ * @returns {Promise} - { publishers: [...] }
+ */
+export const getEpubPublishers = async () => {
+  const response = await api.get('/config/epub/publishers');
+  return response.data;
+};
+
+/**
+ * Create a new EPUB publisher
+ * @param {Object} publisherData - { name, config: {...} }
+ * @returns {Promise} - { publisher }
+ */
+export const createEpubPublisher = async (publisherData) => {
+  const response = await api.post('/config/epub/publishers', publisherData);
+  return response.data;
+};
+
+/**
+ * Update an EPUB publisher
+ * @param {String} name - Publisher name
+ * @param {Object} publisherData - Updated publisher data
+ * @returns {Promise} - { publisher }
+ */
+export const updateEpubPublisher = async (name, publisherData) => {
+  const response = await api.put(`/config/epub/publishers/${encodeURIComponent(name)}`, publisherData);
+  return response.data;
+};
+
+/**
+ * Delete an EPUB publisher
+ * @param {String} name - Publisher name
+ * @returns {Promise} - { message }
+ */
+export const deleteEpubPublisher = async (name) => {
+  const response = await api.delete(`/config/epub/publishers/${encodeURIComponent(name)}`);
+  return response.data;
+};
+
+/**
+ * Get EPUB configuration
+ * @returns {Promise} - { config }
+ */
+export const getEpubConfig = async () => {
+  const response = await api.get('/config/epub/config');
+  return response.data;
+};
+
+/**
+ * Get EPUB dropdown options
+ * @returns {Promise} - { options }
+ */
+export const getEpubDropdownOptions = async () => {
+  const response = await api.get('/config/epub/dropdown-options');
+  return response.data;
+};
+
+/**
+ * Get PDF service info
+ * @returns {Promise} - { info }
+ */
+export const getPdfServiceInfo = async () => {
+  const response = await api.get('/config/pdf/info');
+  return response.data;
+};
+
+/**
+ * Get EPUB service info
+ * @returns {Promise} - { info }
+ */
+export const getEpubServiceInfo = async () => {
+  const response = await api.get('/config/epub/info');
+  return response.data;
+};
+
+// ============================================
+// ADMIN CONFIGURATION ENDPOINTS
+// ============================================
+
+/**
+ * Get admin configuration
+ * @returns {Promise} - { pdf, epub, useExternalApis }
+ */
+export const getAdminConfig = async () => {
+  const response = await api.get('/config/admin');
+  return response.data;
+};
+
+/**
+ * Update admin configuration
+ * @param {Object} config - { pdf, epub, useExternalApis }
+ * @returns {Promise} - { config }
+ */
+export const updateAdminConfig = async (config) => {
+  const response = await api.put('/config/admin', config);
+  return response.data;
+};
+
+/**
+ * Update PDF pipeline configuration
+ * @param {Object} pdfConfig - PDF configuration settings
+ * @returns {Promise} - { config }
+ */
+export const updatePdfConfig = async (pdfConfig) => {
+  const response = await api.put('/config/admin/pdf', pdfConfig);
+  return response.data;
+};
+
+/**
+ * Update EPUB pipeline configuration
+ * @param {Object} epubConfig - EPUB configuration settings
+ * @returns {Promise} - { config }
+ */
+export const updateEpubConfig = async (epubConfig) => {
+  const response = await api.put('/config/admin/epub', epubConfig);
+  return response.data;
+};
+
+/**
+ * Reset configuration to defaults
+ * @returns {Promise} - { config }
+ */
+export const resetAdminConfig = async () => {
+  const response = await api.post('/config/admin/reset');
+  return response.data;
+};
+
+/**
+ * Get configuration dropdown options
+ * @returns {Promise} - { pdf: {...}, epub: {...} }
+ */
+export const getConfigOptions = async () => {
+  const response = await api.get('/config/admin/options');
+  return response.data;
+};
+
+// ============================================
 // HEALTH CHECK
 // ============================================
 
@@ -313,10 +524,30 @@ export const getFileStatusInfo = (status) => {
       color: 'yellow',
       description: 'File uploaded to server'
     },
+    pending: {
+      label: 'Pending',
+      color: 'yellow',
+      description: 'Waiting to be processed'
+    },
     processing: {
       label: 'Processing',
       color: 'blue',
       description: 'Converting file formats'
+    },
+    ready_for_review: {
+      label: 'Ready for Review',
+      color: 'purple',
+      description: 'Conversion complete, ready for editing'
+    },
+    editing: {
+      label: 'Editing',
+      color: 'orange',
+      description: 'Document is being edited'
+    },
+    finalizing: {
+      label: 'Finalizing',
+      color: 'blue',
+      description: 'Generating final output'
     },
     completed: {
       label: 'Completed',
@@ -353,6 +584,26 @@ export const changePassword = async (currentPassword, newPassword) => {
  */
 export const getConversionDashboardFiles = async (params = {}) => {
   const response = await api.get('/files/conversion-dashboard', { params });
+  return response.data;
+};
+
+/**
+ * Get conversion records from MongoDB (Admin only)
+ * @param {Object} params - Query parameters { status, fileType, startDate, endDate, search, limit, offset, sortBy, sortOrder }
+ * @returns {Promise} - { records, total, limit, offset }
+ */
+export const getConversionRecords = async (params = {}) => {
+  const response = await api.get('/files/conversion-records', { params });
+  return response.data;
+};
+
+/**
+ * Get conversion statistics (Admin only)
+ * @param {Object} params - Query parameters { startDate, endDate, fileType }
+ * @returns {Promise} - { summary, daily }
+ */
+export const getConversionStats = async (params = {}) => {
+  const response = await api.get('/files/conversion-stats', { params });
   return response.data;
 };
 

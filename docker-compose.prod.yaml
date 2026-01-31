@@ -1,0 +1,150 @@
+version: "3.9"
+
+# =============================================================================
+# Manuscript Processor - Production Docker Compose
+# =============================================================================
+# For deployment on EC2 or any Docker host
+# Requires: MONGODB_URI environment variable (external MongoDB)
+# =============================================================================
+
+services:
+  # ===========================================================================
+  # Backend API
+  # ===========================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.prod
+    container_name: manuscript-backend
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: 5000
+      MONGODB_URI: ${MONGODB_URI}
+      JWT_SECRET: ${JWT_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost}
+      USE_EXTERNAL_APIS: ${USE_EXTERNAL_APIS:-true}
+      PDF_API_URL: ${PDF_API_URL:-http://pdf-api:8000}
+      EPUB_API_URL: ${EPUB_API_URL:-http://epub-api:5001}
+      EPUB_EDITOR_URL: ${EPUB_EDITOR_URL:-http://epub-api:5000}
+      EMAIL_ENABLED: ${EMAIL_ENABLED:-false}
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USER: ${EMAIL_USER:-}
+      EMAIL_PASS: ${EMAIL_PASS:-}
+    ports:
+      - "5000:5000"
+    volumes:
+      - backend-uploads:/usr/src/app/uploads
+      - backend-outputs:/usr/src/app/outputs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # Frontend (Nginx serving built React app)
+  # ===========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:5000/api}
+    container_name: manuscript-frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # PDF Processing API
+  # ===========================================================================
+  # Remove this service if using external PDF API
+  pdf-api:
+    build:
+      context: ./mocks/pdf-api
+    container_name: manuscript-pdf-api
+    restart: always
+    environment:
+      PORT: 8000
+      MONGODB_URI: ${MONGODB_URI}
+    ports:
+      - "8000:8000"
+    profiles:
+      - with-mocks
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ===========================================================================
+  # EPUB Processing API
+  # ===========================================================================
+  # Remove this service if using external EPUB API
+  epub-api:
+    build:
+      context: ./mocks/epub-api
+    container_name: manuscript-epub-api
+    restart: always
+    environment:
+      PORT: 5001
+      EDITOR_PORT: 5000
+      MONGODB_URI: ${MONGODB_URI}
+    ports:
+      - "5001:5001"
+    profiles:
+      - with-mocks
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  backend-uploads:
+  backend-outputs:
+
+# =============================================================================
+# DEPLOYMENT COMMANDS
+# =============================================================================
+#
+# 1. Set environment variables:
+#    export MONGODB_URI="mongodb+srv://user:pass@cluster.mongodb.net/manuscript"
+#    export JWT_SECRET="your-super-secret-jwt-key"
+#    export FRONTEND_URL="http://your-domain.com"
+#    export VITE_API_URL="http://your-domain.com:5000/api"
+#
+# 2. Deploy (backend + frontend only, external APIs):
+#    docker-compose -f docker-compose.prod.yaml up -d --build
+#
+# 3. Deploy with mock APIs:
+#    docker-compose -f docker-compose.prod.yaml --profile with-mocks up -d --build
+#
+# 4. View logs:
+#    docker-compose -f docker-compose.prod.yaml logs -f
+#
+# 5. Stop:
+#    docker-compose -f docker-compose.prod.yaml down
+# =============================================================================
