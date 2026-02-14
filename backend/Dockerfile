@@ -1,39 +1,42 @@
-# Backend Dockerfile
-FROM node:20-bullseye
+FROM node:20-bookworm-slim
 
 # 1. Install Python + venv + build tools (for lxml, Pillow, etc.)
 RUN apt-get update && \
-    apt-get install -y \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends \
       python3 \
       python3-venv \
       python3-pip \
       build-essential \
       libxml2-dev \
-      libxslt1-dev && \
+      libxslt1-dev \
+      git && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. Set working directory
 WORKDIR /usr/src/app
 
-# 3. Install Node dependencies
+# 3. Copy only package files first
 COPY package*.json ./
-RUN npm install
 
-# 4. Copy the rest of the backend code (includes RittDocConverter & PDFtoXMLUsingExcel)
+# 4. Install Node dependencies (less strict, won’t fail on lockfile issues)
+RUN npm install --omit=dev
+
+# 5. Copy the rest of the backend code
 COPY . .
 
-# 5. Create a single global Python venv for ALL pipelines
+# 6. Create Python venv
 RUN python3 -m venv /venv
 ENV PATH="/venv/bin:$PATH"
 
-# 6. Install Python dependencies for both pipelines from requirements files
-#    Make sure these files exist in your repo
+# 7. Install Python dependencies
+
 RUN pip install --upgrade pip setuptools wheel && \
     pip install --no-cache-dir \
       -r RittDocConverter/requirements.txt \
       -r PDFtoXMLUsingExcel/requirements.txt
 
-# 7. Env + port
+# 8. Env + port
 ENV PORT=5000
 EXPOSE 5000
 

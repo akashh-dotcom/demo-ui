@@ -1,0 +1,98 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      frontend_tag:
+        description: "Frontend image tag to rollback to (e.g. abc1234)"
+        required: true
+      backend_tag:
+        description: "Backend image tag to rollback to (e.g. def5678)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  rollback:
+    name: Update docker-compose with old image tags
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Clone manuscript-apps repo
+        run: |
+          git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/akashh-dotcom/manuscript-apps.git
+          cd manuscript-apps
+
+      - name: Update docker-compose image tags
+        run: |
+          set -e
+          cd manuscript-apps
+
+          FRONTEND_TAG="${{ inputs.frontend_tag }}"
+          BACKEND_TAG="${{ inputs.backend_tag }}"
+
+          echo "🔁 Rolling back frontend to $FRONTEND_TAG"
+          echo "🔁 Rolling back backend to $BACKEND_TAG"
+
+          sed -i "s|\${image}/frontend:.*|\${image}/frontend:${FRONTEND_TAG}|g" docker-compose.yaml
+          sed -i "s|\${image}/backend:.*|\${image}/backend:${BACKEND_TAG}|g" docker-compose.yaml
+
+          git status
+
+      - name: Commit and push rollback
+        run: |
+          cd manuscript-apps
+
+          if git diff --quiet; then
+            echo "⏭️ No changes to commit"
+            exit 0
+          fi
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add docker-compose.yaml
+          git commit -m "Rollback to frontend:${{ inputs.frontend_tag }} backend:${{ inputs.backend_tag }}"
+          git push origin main
+    
+  deploy-via-ssm:
+    name: Deploy to EC2 via SSM run command
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.name == 'Update docker-compose with old image tags'
+    runs-on: ubuntu-latest
+    needs: [rollback]          
+    env:
+      AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}          
+    steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/github-oidc
+          aws-region: ${{ env.AWS_REGION }}
+  
+      - name: Deploy using SSM Run Command
+        run: |
+          aws ssm send-command \
+            --instance-ids ${{ env.INSTANCE_ID }} \
+            --document-name "AWS-RunShellScript" \
+            --comment "Rollback manuscript apps via GitHub Actions" \
+            --parameters 'commands=[
+              "set -e",
+              "cd /home/ubuntu || exit 1",
+              "export HOME=/root",
+              "git config --global --add safe.directory /home/ubuntu/manuscript-apps",
+              "if [ ! -d manuscript-apps ]; then git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/akashh-dotcom/manuscript-apps.git; else cd manuscript-apps && git pull origin main; fi",
+              "cd /home/ubuntu/manuscript-apps",
+              "chmod 644 export-secrets.sh",
+              ". ./export-secrets.sh",
+              "aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com",
+              "docker compose pull",
+              "docker compose down",
+              "docker compose up -d",
+              "docker image prune -a -f"
+              "docker exec ritt-frontend npm run build",
+              "rm -rf /var/www/html/*",
+              "docker cp ritt-frontend:/usr/src/app/dist/. /var/www/html/"
+            ]'
