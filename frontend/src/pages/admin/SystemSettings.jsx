@@ -18,7 +18,13 @@ import {
   AlertCircle,
   Loader2,
   RotateCcw,
-  Sliders
+  Sliders,
+  Mail,
+  FolderOpen,
+  Key,
+  DollarSign,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import {
   checkExternalServicesHealth,
@@ -27,6 +33,7 @@ import {
   updateEpubPublisher,
   deleteEpubPublisher,
   getAdminConfig,
+  updateAdminConfig,
   updatePdfConfig,
   updateEpubConfig,
   resetAdminConfig,
@@ -235,11 +242,92 @@ export const SystemSettings = () => {
     }
   };
 
+  // Email templates state
+  const [emailTemplates, setEmailTemplates] = useState({
+    success: '<h1>Conversion Complete</h1>\n<p>Your file {{fileName}} has been successfully converted.</p>',
+    failure: '<h1>Conversion Failed</h1>\n<p>Your file {{fileName}} could not be converted. Error: {{error}}</p>',
+    batchComplete: '<h1>Batch Complete</h1>\n<p>Your batch {{batchId}} has finished processing. {{completed}} of {{total}} files succeeded.</p>'
+  });
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailDirty, setEmailDirty] = useState(false);
+  const [emailPreview, setEmailPreview] = useState(null);
+
+  // Path config state
+  const [pathConfig, setPathConfig] = useState({
+    defaultOutputPath: '',
+    defaultUploadPath: '',
+    tempDirectory: ''
+  });
+  const [pathSaving, setPathSaving] = useState(false);
+  const [pathDirty, setPathDirty] = useState(false);
+
+  // Cost settings state
+  const [costRates, setCostRates] = useState([
+    { model: 'claude-sonnet-4-20250514', label: 'Claude Sonnet 4', inputCost: 3.0, outputCost: 15.0 },
+    { model: 'claude-opus-4-20250514', label: 'Claude Opus 4', inputCost: 15.0, outputCost: 75.0 },
+    { model: 'gpt-4', label: 'GPT-4', inputCost: 30.0, outputCost: 60.0 },
+    { model: 'gpt-4-turbo', label: 'GPT-4 Turbo', inputCost: 10.0, outputCost: 30.0 }
+  ]);
+  const [costSaving, setCostSaving] = useState(false);
+  const [costDirty, setCostDirty] = useState(false);
+
+  // Sync additional config
+  useEffect(() => {
+    if (adminConfig) {
+      if (adminConfig.emailTemplates) setEmailTemplates(adminConfig.emailTemplates);
+      if (adminConfig.paths) setPathConfig(adminConfig.paths);
+      if (adminConfig.costRates) setCostRates(adminConfig.costRates);
+    }
+  }, [adminConfig]);
+
+  const handleSaveEmailTemplates = async () => {
+    setEmailSaving(true);
+    try {
+      await updateAdminConfig({ emailTemplates });
+      showSuccess('Saved', 'Email templates have been updated');
+      setEmailDirty(false);
+    } catch (error) {
+      handleError(error, 'Failed to save email templates');
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
+  const handleSavePathConfig = async () => {
+    setPathSaving(true);
+    try {
+      await updateAdminConfig({ paths: pathConfig });
+      showSuccess('Saved', 'Path configuration has been updated');
+      setPathDirty(false);
+    } catch (error) {
+      handleError(error, 'Failed to save path configuration');
+    } finally {
+      setPathSaving(false);
+    }
+  };
+
+  const handleSaveCostRates = async () => {
+    setCostSaving(true);
+    try {
+      await updateAdminConfig({ costRates });
+      showSuccess('Saved', 'Cost settings have been updated');
+      setCostDirty(false);
+    } catch (error) {
+      handleError(error, 'Failed to save cost settings');
+    } finally {
+      setCostSaving(false);
+    }
+  };
+
   const tabs = [
     { id: 'health', label: 'Service Health', icon: Server },
     { id: 'pdf', label: 'PDF Pipeline', icon: FileText },
     { id: 'epub', label: 'EPUB Pipeline', icon: BookOpen },
-    { id: 'publishers', label: 'Publishers', icon: Settings }
+    { id: 'publishers', label: 'Publishers', icon: Settings },
+    { id: 'email', label: 'Email Templates', icon: Mail },
+    { id: 'paths', label: 'Path Config', icon: FolderOpen },
+    { id: 'apikeys', label: 'API Keys', icon: Key },
+    { id: 'costs', label: 'Cost Settings', icon: DollarSign }
   ];
 
   const renderHealthStatus = (service) => {
@@ -636,6 +724,362 @@ export const SystemSettings = () => {
                     <p className="text-sm">Make sure you have admin privileges.</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Email Templates Tab */}
+            {activeTab === 'email' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Email Templates</h2>
+                    <p className="text-sm text-gray-500 mt-1">Configure notification email templates using HTML with {'{{variable}}'} placeholders</p>
+                  </div>
+                  <button
+                    onClick={handleSaveEmailTemplates}
+                    disabled={emailSaving || !emailDirty}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      emailDirty
+                        ? 'bg-purple-600 text-white hover:bg-purple-700'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {emailSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    Save Templates
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  {/* Success template */}
+                  <div className="border rounded-lg p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <CheckCircle size={18} className="text-green-500" />
+                        Success Template
+                      </h3>
+                      <button
+                        onClick={() => setEmailPreview(emailPreview === 'success' ? null : 'success')}
+                        className="text-sm text-purple-600 hover:text-purple-700"
+                      >
+                        {emailPreview === 'success' ? 'Hide Preview' : 'Preview'}
+                      </button>
+                    </div>
+                    <textarea
+                      value={emailTemplates.success}
+                      onChange={(e) => { setEmailTemplates(prev => ({ ...prev, success: e.target.value })); setEmailDirty(true); }}
+                      rows={5}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                      placeholder="HTML template for conversion success..."
+                    />
+                    {emailPreview === 'success' && (
+                      <div className="mt-3 p-4 bg-gray-50 border rounded-lg">
+                        <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                        <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: emailTemplates.success.replace(/\{\{fileName\}\}/g, 'sample-book.pdf') }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Failure template */}
+                  <div className="border rounded-lg p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <XCircle size={18} className="text-red-500" />
+                        Failure Template
+                      </h3>
+                      <button
+                        onClick={() => setEmailPreview(emailPreview === 'failure' ? null : 'failure')}
+                        className="text-sm text-purple-600 hover:text-purple-700"
+                      >
+                        {emailPreview === 'failure' ? 'Hide Preview' : 'Preview'}
+                      </button>
+                    </div>
+                    <textarea
+                      value={emailTemplates.failure}
+                      onChange={(e) => { setEmailTemplates(prev => ({ ...prev, failure: e.target.value })); setEmailDirty(true); }}
+                      rows={5}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                      placeholder="HTML template for conversion failure..."
+                    />
+                    {emailPreview === 'failure' && (
+                      <div className="mt-3 p-4 bg-gray-50 border rounded-lg">
+                        <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                        <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: emailTemplates.failure.replace(/\{\{fileName\}\}/g, 'sample-book.pdf').replace(/\{\{error\}\}/g, 'Processing timeout') }} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Batch complete template */}
+                  <div className="border rounded-lg p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                        <Mail size={18} className="text-blue-500" />
+                        Batch Complete Template
+                      </h3>
+                      <button
+                        onClick={() => setEmailPreview(emailPreview === 'batch' ? null : 'batch')}
+                        className="text-sm text-purple-600 hover:text-purple-700"
+                      >
+                        {emailPreview === 'batch' ? 'Hide Preview' : 'Preview'}
+                      </button>
+                    </div>
+                    <textarea
+                      value={emailTemplates.batchComplete}
+                      onChange={(e) => { setEmailTemplates(prev => ({ ...prev, batchComplete: e.target.value })); setEmailDirty(true); }}
+                      rows={5}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                      placeholder="HTML template for batch completion..."
+                    />
+                    {emailPreview === 'batch' && (
+                      <div className="mt-3 p-4 bg-gray-50 border rounded-lg">
+                        <p className="text-xs text-gray-500 mb-2">Preview:</p>
+                        <div className="prose prose-sm max-w-none" dangerouslySetInnerHTML={{ __html: emailTemplates.batchComplete.replace(/\{\{batchId\}\}/g, 'batch-001').replace(/\{\{completed\}\}/g, '8').replace(/\{\{total\}\}/g, '10') }} />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Path Configuration Tab */}
+            {activeTab === 'paths' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Path Configuration</h2>
+                    <p className="text-sm text-gray-500 mt-1">Configure default file system paths for processing</p>
+                  </div>
+                  <button
+                    onClick={handleSavePathConfig}
+                    disabled={pathSaving || !pathDirty}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      pathDirty
+                        ? 'bg-purple-600 text-white hover:bg-purple-700'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {pathSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    Save Changes
+                  </button>
+                </div>
+
+                <div className="border rounded-lg p-6">
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Default Output Path</label>
+                      <input
+                        type="text"
+                        value={pathConfig.defaultOutputPath}
+                        onChange={(e) => { setPathConfig(prev => ({ ...prev, defaultOutputPath: e.target.value })); setPathDirty(true); }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="/var/output or C:\Output"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Where converted files will be saved by default</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Default Upload Path</label>
+                      <input
+                        type="text"
+                        value={pathConfig.defaultUploadPath}
+                        onChange={(e) => { setPathConfig(prev => ({ ...prev, defaultUploadPath: e.target.value })); setPathDirty(true); }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="/var/uploads or C:\Uploads"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Temporary directory for uploaded files</p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Temp Directory</label>
+                      <input
+                        type="text"
+                        value={pathConfig.tempDirectory}
+                        onChange={(e) => { setPathConfig(prev => ({ ...prev, tempDirectory: e.target.value })); setPathDirty(true); }}
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        placeholder="/tmp/processing"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">Directory for temporary processing files</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* API Keys Tab */}
+            {activeTab === 'apikeys' && (
+              <div>
+                <div className="mb-6">
+                  <h2 className="text-xl font-semibold text-gray-900">API Keys</h2>
+                  <p className="text-sm text-gray-500 mt-1">View API key status. Keys are managed via environment variables (.env file).</p>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Anthropic Key */}
+                  <div className="border rounded-lg p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <Key size={20} className="text-orange-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">ANTHROPIC_API_KEY</h3>
+                          <p className="text-sm text-gray-500">Used for Claude AI models</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {adminConfig?.apiKeyStatus?.anthropic ? (
+                          <>
+                            <CheckCircle size={18} className="text-green-500" />
+                            <span className="text-sm text-gray-600">
+                              ****{adminConfig.apiKeyStatus.anthropic}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-sm font-mono text-gray-500 bg-gray-100 px-3 py-1 rounded">
+                              {process.env.ANTHROPIC_API_KEY ? '****' + '(set)' : 'Not configured'}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* OpenAI Key */}
+                  <div className="border rounded-lg p-5">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                          <Key size={20} className="text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-gray-900">OPENAI_API_KEY</h3>
+                          <p className="text-sm text-gray-500">Used for GPT-4 models</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {adminConfig?.apiKeyStatus?.openai ? (
+                          <>
+                            <CheckCircle size={18} className="text-green-500" />
+                            <span className="text-sm text-gray-600">
+                              ****{adminConfig.apiKeyStatus.openai}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-sm font-mono text-gray-500 bg-gray-100 px-3 py-1 rounded">
+                            Not configured
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Guidance */}
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle size={20} className="text-blue-500 flex-shrink-0 mt-0.5" />
+                      <div className="text-sm text-blue-800">
+                        <p className="font-medium mb-1">Updating API Keys</p>
+                        <p>API keys are managed through environment variables for security. To update:</p>
+                        <ol className="list-decimal ml-5 mt-2 space-y-1">
+                          <li>Open the <code className="bg-blue-100 px-1 rounded">.env</code> file in the backend directory</li>
+                          <li>Update <code className="bg-blue-100 px-1 rounded">ANTHROPIC_API_KEY</code> or <code className="bg-blue-100 px-1 rounded">OPENAI_API_KEY</code></li>
+                          <li>Restart the backend service for changes to take effect</li>
+                        </ol>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Cost Settings Tab */}
+            {activeTab === 'costs' && (
+              <div>
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900">Cost Settings</h2>
+                    <p className="text-sm text-gray-500 mt-1">Configure cost rates per million tokens for each model</p>
+                  </div>
+                  <button
+                    onClick={handleSaveCostRates}
+                    disabled={costSaving || !costDirty}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                      costDirty
+                        ? 'bg-purple-600 text-white hover:bg-purple-700'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {costSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    Save Rates
+                  </button>
+                </div>
+
+                <div className="border rounded-lg overflow-hidden">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Input Cost ($/M tokens)</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Output Cost ($/M tokens)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {costRates.map((rate, index) => (
+                        <tr key={rate.model} className="hover:bg-gray-50">
+                          <td className="px-6 py-4">
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{rate.label}</p>
+                              <p className="text-xs text-gray-500 font-mono">{rate.model}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-500">$</span>
+                              <input
+                                type="number"
+                                value={rate.inputCost}
+                                onChange={(e) => {
+                                  const updated = [...costRates];
+                                  updated[index] = { ...updated[index], inputCost: parseFloat(e.target.value) || 0 };
+                                  setCostRates(updated);
+                                  setCostDirty(true);
+                                }}
+                                step="0.1"
+                                min="0"
+                                className="w-24 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                              />
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1">
+                              <span className="text-gray-500">$</span>
+                              <input
+                                type="number"
+                                value={rate.outputCost}
+                                onChange={(e) => {
+                                  const updated = [...costRates];
+                                  updated[index] = { ...updated[index], outputCost: parseFloat(e.target.value) || 0 };
+                                  setCostRates(updated);
+                                  setCostDirty(true);
+                                }}
+                                step="0.1"
+                                min="0"
+                                className="w-24 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 bg-gray-50 border rounded-lg p-4">
+                  <p className="text-sm text-gray-600">
+                    <DollarSign size={14} className="inline text-gray-500 mr-1" />
+                    Costs are specified per million tokens. These rates are used for estimating conversion costs in the dashboard.
+                  </p>
+                </div>
               </div>
             )}
 

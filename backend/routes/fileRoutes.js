@@ -14,10 +14,14 @@ const {
   getCostSummary,
   launchEditor,
   finalizeFile,
-  webhookComplete
+  webhookComplete,
+  batchUpload,
+  batchDelete,
+  batchDownload,
+  getBatchStatus
 } = require('../controllers/fileController');
 const { authenticate, authorizeAdmin } = require('../middleware/auth');
-const { upload, handleMulterError } = require('../middleware/upload');
+const { upload, batchUpload: batchUploadMiddleware, handleMulterError } = require('../middleware/upload');
 
 // Webhook endpoint (no auth - called by external editors)
 // External editors call this when user saves/completes editing
@@ -31,6 +35,12 @@ router.post('/upload', upload.fields([
   { name: 'file', maxCount: 1 },
   { name: 'metadataFile', maxCount: 1 }
 ]), handleMulterError, uploadFile);
+
+// Batch operations
+router.post('/upload-batch', batchUploadMiddleware.array('files', 20), handleMulterError, batchUpload);
+router.delete('/batch', batchDelete);
+router.post('/batch-download', batchDownload);
+router.get('/batch-status/:batchId', getBatchStatus);
 
 // Get user's files
 router.get('/', getUserFiles);

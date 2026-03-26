@@ -85,7 +85,31 @@ const handleMulterError = (err, req, res, next) => {
   next();
 };
 
+// Batch upload configuration - accepts up to 20 files
+const batchUpload = multer({
+  storage: storage,
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedMimeTypes = [
+      'application/pdf',
+      'application/epub+zip',
+      'application/epub'
+    ];
+    const allowedExtensions = ['.pdf', '.epub'];
+
+    if (allowedMimeTypes.includes(file.mimetype) && allowedExtensions.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only PDF and EPUB files are allowed.'), false);
+    }
+  },
+  limits: {
+    fileSize: 500 * 1024 * 1024 // 500MB max file size per file
+  }
+});
+
 module.exports = {
   upload,
+  batchUpload,
   handleMulterError
 };

@@ -4,6 +4,16 @@ import { useAuth } from '../contexts/AuthContext';
 import { useManuscripts } from '../hooks/useManuscripts';
 import { useNotification } from '../contexts/NotificationContext';
 import Loading from '../components/shared/Loading';
+import CostDisplay from '../components/shared/CostDisplay';
+import { DollarSign, TrendingUp } from 'lucide-react';
+import {
+  AreaChart,
+  Area,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+} from 'recharts';
+import api from '../utils/api';
 
 export const Dashboard = () => {
   const { user, getUserDisplayName } = useAuth();
@@ -16,7 +26,12 @@ export const Dashboard = () => {
     completed: 0,
     failed: 0,
   });
-  
+  const [costData, setCostData] = useState({
+    totalCost: null,
+    avgCostPerBook: null,
+    trend: [],
+  });
+
   const hasLoadedRef = useRef(false);
 
   useEffect(() => {
@@ -35,8 +50,26 @@ export const Dashboard = () => {
 
   const loadData = async () => {
     try {
-      // Load all manuscripts (not just 5) to get accurate stats
-      await getManuscripts({ limit: 100 });
+      // Load manuscripts and cost summary in parallel
+      const manuscriptPromise = getManuscripts({ limit: 100 });
+
+      let costPromise;
+      try {
+        costPromise = api.get('/files/cost-summary');
+      } catch {
+        costPromise = Promise.resolve(null);
+      }
+
+      const [, costResponse] = await Promise.all([manuscriptPromise, costPromise]);
+
+      if (costResponse?.data) {
+        const data = costResponse.data?.data || costResponse.data;
+        setCostData({
+          totalCost: data.totalSpend ?? null,
+          avgCostPerBook: data.avgPerBook ?? null,
+          trend: data.trend || [],
+        });
+      }
     } catch (error) {
       handleError(error, 'Failed to load dashboard data');
     }
@@ -96,7 +129,7 @@ export const Dashboard = () => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return 'N/A';
-    
+
     return date.toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -105,17 +138,17 @@ export const Dashboard = () => {
   };
 
   // Get only the 5 most recent manuscripts for display
-  const recentManuscripts = Array.isArray(manuscripts) 
-    ? manuscripts.slice(0, 5) 
+  const recentManuscripts = Array.isArray(manuscripts)
+    ? manuscripts.slice(0, 5)
     : [];
 
   const StatCard = ({ icon, title, value, color, borderColor }) => (
-    <div 
+    <div
       className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
       style={{ borderLeft: `4px solid ${borderColor}` }}
     >
       <div className="flex items-center">
-        <div 
+        <div
           className="flex-shrink-0 rounded-md p-2 sm:p-3"
           style={{ backgroundColor: color }}
         >
@@ -131,6 +164,16 @@ export const Dashboard = () => {
     </div>
   );
 
+  const CostTrendMiniTooltip = ({ active, payload }) => {
+    if (!active || !payload || !payload.length) return null;
+    return (
+      <div className="bg-white px-3 py-2 border rounded-lg shadow-md text-xs">
+        <p className="font-medium">{payload[0].payload.date}</p>
+        <p style={{ color: '#6890b8' }}>${Number(payload[0].value).toFixed(2)}</p>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
       <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
@@ -144,8 +187,8 @@ export const Dashboard = () => {
           </p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+        {/* Row 1: Manuscript Stats Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-6">
           <StatCard
             icon={
               <svg className="h-5 w-5 sm:h-6 sm:w-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -207,6 +250,78 @@ export const Dashboard = () => {
           />
         </div>
 
+        {/* Row 2: Cost Stats Cards + Mini Chart */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
+          {/* Total AI Cost card */}
+          <div
+            className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
+            style={{ borderLeft: '4px solid #4f7299' }}
+          >
+            <div className="flex items-center">
+              <div className="flex-shrink-0 rounded-md p-2 sm:p-3" style={{ backgroundColor: '#4f7299' }}>
+                <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
+              <div className="ml-3 sm:ml-5">
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Total AI Cost</p>
+                <p className="text-xl sm:text-2xl font-semibold" style={{ color: '#2c3e50' }}>
+                  {costData.totalCost != null ? `$${Number(costData.totalCost).toFixed(2)}` : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Avg Cost/Book card */}
+          <div
+            className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
+            style={{ borderLeft: '4px solid #3d5b7a' }}
+          >
+            <div className="flex items-center">
+              <div className="flex-shrink-0 rounded-md p-2 sm:p-3" style={{ backgroundColor: '#3d5b7a' }}>
+                <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
+              </div>
+              <div className="ml-3 sm:ml-5">
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Avg Cost/Book</p>
+                <p className="text-xl sm:text-2xl font-semibold" style={{ color: '#2c3e50' }}>
+                  {costData.avgCostPerBook != null ? `$${Number(costData.avgCostPerBook).toFixed(2)}` : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Cost Trend Mini Chart */}
+          <div
+            className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
+            style={{ borderLeft: '4px solid #6890b8' }}
+          >
+            <p className="text-xs sm:text-sm font-medium text-gray-600 mb-2">Cost Trend (7 days)</p>
+            {costData.trend && costData.trend.length > 0 ? (
+              <ResponsiveContainer width="100%" height={60}>
+                <AreaChart data={costData.trend} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="dashboardTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#6890b8" stopOpacity={0.6} />
+                      <stop offset="95%" stopColor="#6890b8" stopOpacity={0.05} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" hide />
+                  <Tooltip content={<CostTrendMiniTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="cost"
+                    stroke="#6890b8"
+                    fill="url(#dashboardTrendGrad)"
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[60px] text-gray-400 text-xs">
+                No trend data
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Recent Manuscripts Table */}
         <div className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg overflow-hidden">
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
@@ -243,6 +358,9 @@ export const Dashboard = () => {
                         <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Status
                         </th>
+                        <th className="hidden md:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Cost
+                        </th>
                         <th className="hidden sm:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                           Upload Date
                         </th>
@@ -274,6 +392,12 @@ export const Dashboard = () => {
                               >
                                 {getStatusLabel(manuscript.status)}
                               </span>
+                            </td>
+                            <td className="hidden md:table-cell px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm">
+                              <CostDisplay
+                                amount={manuscript.conversion_metadata?.cost ?? manuscript.cost ?? null}
+                                size="sm"
+                              />
                             </td>
                             <td className="hidden sm:table-cell px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
                               {formatDate(manuscript.upload_date || manuscript.created_at || manuscript.createdAt)}

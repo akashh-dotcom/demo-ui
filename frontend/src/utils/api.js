@@ -607,5 +607,96 @@ export const getConversionStats = async (params = {}) => {
   return response.data;
 };
 
+// ============================================
+// COST ANALYTICS ENDPOINTS
+// ============================================
+
+/**
+ * Get cost summary (totals, averages, extremes)
+ * @returns {Promise} - { totalSpend, thisMonth, avgPerBook, mostExpensive, cheapest }
+ */
+export const getCostSummary = async () => {
+  const response = await api.get('/files/cost-summary');
+  return response.data;
+};
+
+/**
+ * Get cost analytics with filters
+ * @param {Object} params - { startDate, endDate, fileType, publisher, model }
+ * @returns {Promise} - { daily, byType, byModel, byPublisher, records }
+ */
+export const getCostAnalytics = async (params = {}) => {
+  const response = await api.get('/files/cost-analytics', { params });
+  return response.data;
+};
+
+// ============================================
+// BATCH OPERATION ENDPOINTS
+// ============================================
+
+/**
+ * Upload multiple files as a batch
+ * @param {FileList|Array} files - Files to upload
+ * @param {Function} onUploadProgress - Progress callback
+ * @returns {Promise} - { batchId, files }
+ */
+export const uploadBatch = async (files, onUploadProgress) => {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append('files', file);
+  }
+
+  const response = await api.post('/files/upload-batch', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 600000, // 10 minutes for batch uploads
+    onUploadProgress: (progressEvent) => {
+      if (onUploadProgress) {
+        const percentCompleted = Math.round(
+          (progressEvent.loaded * 100) / progressEvent.total
+        );
+        onUploadProgress({
+          progress: percentCompleted,
+          loaded: progressEvent.loaded,
+          total: progressEvent.total
+        });
+      }
+    },
+  });
+  return response.data;
+};
+
+/**
+ * Delete multiple files
+ * @param {Array<String>} fileIds - Array of file IDs
+ * @returns {Promise} - { deleted, errors }
+ */
+export const deleteBatch = async (fileIds) => {
+  const response = await api.delete('/files/batch', { data: { fileIds } });
+  return response.data;
+};
+
+/**
+ * Download multiple files as zip
+ * @param {Array<String>} fileIds - Array of file IDs
+ * @returns {Promise} - Blob
+ */
+export const downloadBatch = async (fileIds) => {
+  const response = await api.post('/files/batch-download', { fileIds }, {
+    responseType: 'blob',
+    timeout: 120000,
+  });
+  return response.data;
+};
+
+/**
+ * Get batch status
+ * @param {String} batchId - Batch ID
+ * @returns {Promise} - { batchId, files, overall }
+ */
+export const getBatchStatus = async (batchId) => {
+  const response = await api.get(`/files/batch-status/${batchId}`);
+  return response.data;
+};
+
 // Export axios instance as default for custom requests
 export default api;

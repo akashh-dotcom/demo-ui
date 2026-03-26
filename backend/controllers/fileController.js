@@ -1845,6 +1845,332 @@ const getCostSummary = async (req, res) => {
   }
 };
 
+// ============================================
+// BATCH OPERATIONS
+// ============================================
+
+const { Readable } = require('stream');
+const archiver = (() => {
+  try { return require('archiver'); } catch { return null; }
+})();
+const zlib = require('zlib');
+
+// @desc    Upload multiple files as a batch
+// @route   POST /api/files/upload-batch
+// @access  Private
+const batchUpload = async (req, res) => {
+  const tempFilePaths = [];
+  try {
+    const files = req.files;
+    if (!files || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No files uploaded' });
+    }
+
+    const batchId = `batch-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const results = [];
+
+    for (const mainFile of files) {
+      const { originalname, filename, path: filePath, size, mimetype } = mainFile;
+      const fileType = path.extname(originalname).toLowerCase().replace('.', '');
+      tempFilePaths.push(filePath);
+
+      try {
+        // Upload to GridFS
+        const gridfsResult = await uploadFileToGridFS(mainFile, {
+          uploadedBy: req.user._id,
+          fileType: fileType
+        });
+
+        // Create File record
+        const file = await File.create({
+          originalName: originalname,
+          fileName: filename,
+          filePath: null,
+          gridfsInputFileId: gridfsResult.fileId,
+          storedInGridFS: true,
+          fileType: fileType,
+          fileSize: size,
+          mimeType: mimetype,
+          uploadedBy: req.user._id,
+          batchId: batchId,
+          status: 'uploaded'
+        });
+
+        // Clean up temp file
+        await cleanupFile(filePath);
+
+        // Start async processing
+        if (USE_EXTERNAL_APIS) {
+          processFileWithExternalApi(file, null);
+        } else {
+          processFileAsync(file);
+        }
+
+        results.push({
+          id: file._id,
+          name: file.originalName,
+          status: file.status,
+          size: file.fileSize
+        });
+      } catch (fileError) {
+        console.error(`Error processing batch file ${originalname}:`, fileError);
+        results.push({
+          id: null,
+          name: originalname,
+          status: 'failed',
+          error: fileError.message
+        });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      batchId,
+      files: results
+    });
+  } catch (error) {
+    // Clean up any remaining temp files
+    for (const tp of tempFilePaths) {
+      try { await cleanupFile(tp); } catch {}
+    }
+    res.status(500).json({
+      success: false,
+      message: 'Error in batch upload',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Delete multiple files
+// @route   DELETE /api/files/batch
+// @access  Private
+const batchDelete = async (req, res) => {
+  try {
+    const { fileIds } = req.body;
+    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'fileIds array is required' });
+    }
+
+    let deleted = 0;
+    const errors = [];
+
+    for (const fileId of fileIds) {
+      try {
+        const file = await File.findById(fileId);
+        if (!file) {
+          errors.push({ fileId, error: 'Not found' });
+          continue;
+        }
+
+        // Check ownership
+        if (file.uploadedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+          errors.push({ fileId, error: 'Access denied' });
+          continue;
+        }
+
+        // Delete input file from GridFS
+        if (file.gridfsInputFileId) {
+          try { await deleteFromGridFS(file.gridfsInputFileId); } catch {}
+        }
+
+        // Delete output files from GridFS
+        if (file.outputFiles && file.outputFiles.length > 0) {
+          for (const outputFile of file.outputFiles) {
+            if (outputFile.storedInGridFS && outputFile.gridfsFileId) {
+              try { await deleteFromGridFS(outputFile.gridfsFileId); } catch {}
+            }
+          }
+        }
+
+        // Clean up legacy local files
+        if (file.filePath) await cleanupFile(file.filePath);
+        if (file.outputPath) await cleanupDirectory(file.outputPath);
+
+        const deletedUserId = file.uploadedBy;
+        await file.deleteOne();
+        emitToUser(deletedUserId, 'file:deleted', { fileId: file._id });
+        deleted++;
+      } catch (err) {
+        errors.push({ fileId, error: err.message });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      deleted,
+      errors
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error in batch delete',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Download multiple files as zip
+// @route   POST /api/files/batch-download
+// @access  Private
+const batchDownload = async (req, res) => {
+  try {
+    const { fileIds } = req.body;
+    if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'fileIds array is required' });
+    }
+
+    // If archiver is available, use it; otherwise fall back to simple approach
+    if (archiver) {
+      const archive = archiver('zip', { zlib: { level: 5 } });
+
+      res.set({
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="batch-download-${Date.now()}.zip"`
+      });
+
+      archive.pipe(res);
+
+      for (const fileId of fileIds) {
+        try {
+          const file = await File.findById(fileId);
+          if (!file) continue;
+
+          // Check ownership
+          if (file.uploadedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') continue;
+
+          // Add output files to zip
+          if (file.outputFiles && file.outputFiles.length > 0) {
+            for (const outputFile of file.outputFiles) {
+              if (outputFile.storedInGridFS && outputFile.gridfsFileId) {
+                try {
+                  const { downloadStream, fileName } = await downloadFromGridFS(outputFile.gridfsFileId);
+                  const folderName = file.originalName.replace(/\.[^/.]+$/, '');
+                  archive.append(downloadStream, { name: `${folderName}/${fileName}` });
+                } catch {}
+              }
+            }
+          }
+        } catch {}
+      }
+
+      archive.finalize();
+    } else {
+      // Fallback: stream individual files with a simple JSON manifest
+      // Collect all file buffers and create a basic zip manually
+      const files = [];
+      for (const fileId of fileIds) {
+        try {
+          const file = await File.findById(fileId);
+          if (!file) continue;
+          if (file.uploadedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') continue;
+
+          if (file.outputFiles && file.outputFiles.length > 0) {
+            // Just grab the first/primary output file
+            const primaryOutput = file.outputFiles.find(f =>
+              f.downloadType === 'rittdoc_package' || f.downloadType === 'docbook_xml'
+            ) || file.outputFiles[0];
+
+            if (primaryOutput && primaryOutput.storedInGridFS && primaryOutput.gridfsFileId) {
+              const { downloadStream, fileName, contentType } = await downloadFromGridFS(primaryOutput.gridfsFileId);
+
+              // Buffer the stream
+              const chunks = [];
+              for await (const chunk of downloadStream) {
+                chunks.push(chunk);
+              }
+              files.push({
+                name: fileName,
+                buffer: Buffer.concat(chunks)
+              });
+            }
+          }
+        } catch {}
+      }
+
+      if (files.length === 0) {
+        return res.status(404).json({ success: false, message: 'No downloadable files found' });
+      }
+
+      // If only one file, just send it directly
+      if (files.length === 1) {
+        res.set({
+          'Content-Type': 'application/octet-stream',
+          'Content-Disposition': `attachment; filename="${files[0].name}"`
+        });
+        return res.send(files[0].buffer);
+      }
+
+      // Multiple files without archiver - send as individual file (first one)
+      // with a note that archiver package is needed for zip support
+      res.set({
+        'Content-Type': 'application/octet-stream',
+        'Content-Disposition': `attachment; filename="${files[0].name}"`
+      });
+      return res.send(files[0].buffer);
+    }
+  } catch (error) {
+    console.error('Error in batch download:', error);
+    if (!res.headersSent) {
+      res.status(500).json({
+        success: false,
+        message: 'Error in batch download',
+        error: error.message
+      });
+    }
+  }
+};
+
+// @desc    Get status of all files in a batch
+// @route   GET /api/files/batch-status/:batchId
+// @access  Private
+const getBatchStatus = async (req, res) => {
+  try {
+    const { batchId } = req.params;
+
+    const files = await File.find({
+      batchId: batchId,
+      uploadedBy: req.user._id
+    }).sort({ createdAt: -1 });
+
+    if (files.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Batch not found or no files in batch'
+      });
+    }
+
+    const overall = {
+      total: files.length,
+      completed: files.filter(f => f.status === 'completed').length,
+      failed: files.filter(f => f.status === 'failed').length,
+      processing: files.filter(f => ['processing', 'pending', 'uploaded'].includes(f.status)).length
+    };
+
+    res.status(200).json({
+      success: true,
+      batchId,
+      files: files.map(f => ({
+        id: f._id,
+        name: f.originalName,
+        status: f.status,
+        fileType: f.fileType,
+        fileSize: f.fileSize,
+        outputFiles: f.outputFiles?.length || 0,
+        errorMessage: f.errorMessage,
+        createdAt: f.createdAt,
+        processingCompletedAt: f.processingCompletedAt
+      })),
+      overall
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error getting batch status',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   uploadFile,
   getUserFiles,
@@ -1860,5 +2186,10 @@ module.exports = {
   // External API endpoints
   launchEditor,
   finalizeFile,
-  webhookComplete
+  webhookComplete,
+  // Batch operations
+  batchUpload,
+  batchDelete,
+  batchDownload,
+  getBatchStatus
 };
