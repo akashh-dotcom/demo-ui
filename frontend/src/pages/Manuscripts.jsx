@@ -6,19 +6,31 @@ import Navigation from '../components/shared/Navigation';
 import Loading from '../components/shared/Loading';
 import FileUpload from '../components/shared/FileUpload';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
-import { 
-  CheckCircle, 
-  Clock, 
-  Upload, 
-  FileText, 
-  Download, 
-  Trash2, 
+import {
+  CheckCircle,
+  Clock,
+  Upload,
+  FileText,
+  Download,
+  Trash2,
   AlertCircle,
   File,
   ChevronRight,
   ChevronDown,
-  RefreshCw
+  RefreshCw,
+  Edit3,
+  Play,
+  ExternalLink,
+  Loader2,
+  FolderOpen,
+  FileSpreadsheet,
+  X
 } from 'lucide-react';
+import { launchEditor, finalizeFile } from '../utils/api';
+
+// Note: The PDF API no longer requires a separate "finalize" step.
+// Files are ready immediately when status = 'completed'.
+// Editor is now optional (post-completion feature for corrections).
 
 export const Manuscripts = () => {
   const { manuscripts, loading, getManuscripts, uploadManuscript, deleteManuscript, getDownloadUrl, uploadProgress } = useManuscripts();
@@ -31,6 +43,11 @@ export const Manuscripts = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [expandedFile, setExpandedFile] = useState(null);
+  const [editorLoading, setEditorLoading] = useState(null);
+  const [finalizingFile, setFinalizingFile] = useState(null);
+  const [outputFolderPath, setOutputFolderPath] = useState('');
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [metadataFile, setMetadataFile] = useState(null);
   const hasLoadedInitially = useRef(false);
 
   // Initial load - ONLY ONCE
@@ -53,32 +70,51 @@ export const Manuscripts = () => {
     }
   };
 
-  const handleFileSelect = async (file) => {
+  const handleFileSelect = (file) => {
+    setSelectedFile(file);
+  };
+
+  const handleUploadConfirm = async () => {
+    if (!selectedFile) return;
+
     setUploading(true);
     try {
-      console.log('📤 Starting file upload:', file.name);
-      const result = await uploadManuscript(file);
-      
+      console.log('📤 Starting file upload:', selectedFile.name);
+      if (outputFolderPath) {
+        console.log('📁 Output folder:', outputFolderPath);
+      }
+      if (metadataFile) {
+        console.log('📋 Metadata file:', metadataFile.name);
+      }
+
+      const result = await uploadManuscript(selectedFile, {
+        outputFolderPath: outputFolderPath || undefined,
+        metadataFile: metadataFile || undefined
+      });
+
       console.log('✓ Upload result:', result);
-      
+
       // REFRESH #1: Immediately after successful upload
       console.log('🔄 REFRESH #1: Loading manuscripts after upload...');
       await loadManuscripts();
-      
+
       showSuccess(
-        'Upload Successful', 
-        `${file.name} has been uploaded successfully and is now being processed.`
+        'Upload Successful',
+        `${selectedFile.name} has been uploaded successfully and is now being processed.`
       );
-      
+
       setShowUploadModal(false);
-      
+      setSelectedFile(null);
+      setMetadataFile(null);
+      setOutputFolderPath('');
+
     } catch (error) {
       console.error('❌ Upload failed:', error);
-      
+
       // Check if it's a timeout error
       if (error.code === 'ECONNABORTED' && error.message.includes('timeout')) {
         handleError(
-          error, 
+          error,
           'Upload Timeout - The file upload took too long. Please try again with a smaller file or check your internet connection.'
         );
       } else {
@@ -120,6 +156,50 @@ export const Manuscripts = () => {
     showSuccess('Refreshed', 'Manuscripts list has been updated');
   };
 
+  const handleLaunchEditor = async (manuscript) => {
+    setEditorLoading(manuscript.id);
+    try {
+      console.log('🖊️ Launching editor for:', manuscript.file_name);
+      const result = await launchEditor(manuscript.id);
+
+      if (result.success && result.data?.editorUrl) {
+        // Open editor in new tab
+        window.open(result.data.editorUrl, '_blank');
+        showSuccess('Editor Launched', 'The editor has been opened in a new tab');
+        // Refresh to get updated status
+        await loadManuscripts();
+      } else {
+        throw new Error(result.message || 'Failed to launch editor');
+      }
+    } catch (error) {
+      console.error('❌ Failed to launch editor:', error);
+      handleError(error, 'Failed to launch editor');
+    } finally {
+      setEditorLoading(null);
+    }
+  };
+
+  const handleFinalize = async (manuscript) => {
+    setFinalizingFile(manuscript.id);
+    try {
+      console.log('✅ Finalizing:', manuscript.file_name);
+      const result = await finalizeFile(manuscript.id);
+
+      if (result.success) {
+        showSuccess('Finalization Started', 'Your document is being finalized. Refresh to check status.');
+        // Refresh to get updated status
+        await loadManuscripts();
+      } else {
+        throw new Error(result.message || 'Failed to finalize');
+      }
+    } catch (error) {
+      console.error('❌ Failed to finalize:', error);
+      handleError(error, 'Failed to finalize document');
+    } finally {
+      setFinalizingFile(null);
+    }
+  };
+
   const toggleFileExpand = (manuscriptId) => {
     setExpandedFile(expandedFile === manuscriptId ? null : manuscriptId);
   };
@@ -134,6 +214,14 @@ export const Manuscripts = () => {
         label: 'Processing',
         description: 'Converting file formats'
       },
+      pending: {
+        color: 'text-yellow-700',
+        bgColor: 'bg-yellow-50',
+        borderColor: 'border-yellow-200',
+        icon: Clock,
+        label: 'Pending',
+        description: 'Waiting to be processed'
+      },
       processing: {
         color: 'text-blue-700',
         bgColor: 'bg-blue-50',
@@ -141,6 +229,14 @@ export const Manuscripts = () => {
         icon: Clock,
         label: 'Processing',
         description: 'Converting file formats'
+      },
+      editing: {
+        color: 'text-orange-700',
+        bgColor: 'bg-orange-50',
+        borderColor: 'border-orange-200',
+        icon: Edit3,
+        label: 'Editing',
+        description: 'Being edited in web editor'
       },
       completed: {
         color: 'text-success-700',
@@ -158,26 +254,51 @@ export const Manuscripts = () => {
         label: 'Failed',
         description: 'Conversion failed'
       },
+      cancelled: {
+        color: 'text-gray-700',
+        bgColor: 'bg-gray-50',
+        borderColor: 'border-gray-200',
+        icon: AlertCircle,
+        label: 'Cancelled',
+        description: 'Conversion was cancelled'
+      },
     };
     return statusMap[status] || statusMap.processing;
   };
 
   const getTrackingSteps = (status) => {
+    // Simplified steps - conversion now goes directly to completed
     const steps = [
       { id: 'uploaded', label: 'Uploaded', icon: Upload },
       { id: 'processing', label: 'Processing', icon: Clock },
       { id: 'completed', label: 'Completed', icon: CheckCircle }
     ];
 
-    const statusOrder = ['uploaded', 'processing', 'completed', 'failed'];
-    const currentIndex = statusOrder.indexOf(status);
+    // Map status to step index for progress calculation
+    const statusToIndex = {
+      'uploaded': 0,
+      'pending': 0,
+      'processing': 1,
+      'editing': 2,  // Editing is post-completion, so show as completed
+      'completed': 3,
+      'failed': -1,
+      'cancelled': -1
+    };
 
-    return steps.map((step, index) => ({
-      ...step,
-      isCompleted: index < currentIndex || (status === 'completed' && index <= 2),
-      isCurrent: step.id === status || (status === 'failed' && step.id === 'completed'),
-      isFailed: status === 'failed' && step.id === 'completed'
-    }));
+    const currentIndex = statusToIndex[status] ?? 1;
+
+    return steps.map((step, index) => {
+      const stepIndex = index;
+      const isEditing = status === 'editing' && step.id === 'completed';
+
+      return {
+        ...step,
+        isCompleted: stepIndex < currentIndex,
+        isCurrent: stepIndex === currentIndex || isEditing,
+        isFailed: (status === 'failed' || status === 'cancelled') && stepIndex === steps.length - 1,
+        label: isEditing ? 'Editing' : step.label
+      };
+    });
   };
 
   const formatFileSize = (bytes) => {
@@ -280,8 +401,10 @@ export const Manuscripts = () => {
                 style={{ '--tw-ring-color': '#6890b8' }}
               >
                 <option value="all">All Status</option>
-                <option value="uploaded">Processing (Uploaded)</option>
+                <option value="uploaded">Uploaded</option>
+                <option value="pending">Pending</option>
                 <option value="processing">Processing</option>
+                <option value="editing">Editing</option>
                 <option value="completed">Completed</option>
                 <option value="failed">Failed</option>
               </select>
@@ -471,6 +594,91 @@ export const Manuscripts = () => {
                         </div>
                       )}
 
+                      {/* Edit Section - Show for editing and completed statuses (editor is optional post-completion) */}
+                      {(manuscript.status === 'editing' || manuscript.status === 'completed') && (
+                        <div className="mb-6 p-4 rounded-lg border-2" style={{
+                          backgroundColor: '#f0fdf4',
+                          borderColor: '#22c55e'
+                        }}>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Edit3 size={20} style={{ color: '#15803d' }} />
+                            <h4 className="font-semibold text-gray-900">
+                              {manuscript.status === 'editing' ? 'Editing in Progress' : 'Edit Document (Optional)'}
+                            </h4>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-4">
+                            {manuscript.status === 'editing'
+                              ? 'Your document is open in the editor. After making changes, save in the editor and click "Refresh Files" to download the updated output.'
+                              : 'Need to make corrections? Open the editor to modify your document. Changes are saved automatically when you save in the editor.'}
+                          </p>
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            {/* Launch Editor Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleLaunchEditor(manuscript);
+                              }}
+                              disabled={editorLoading === manuscript.id}
+                              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 text-white rounded-lg font-semibold transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                              style={{
+                                backgroundColor: '#15803d',
+                                border: '2px solid #166534'
+                              }}
+                            >
+                              {editorLoading === manuscript.id ? (
+                                <>
+                                  <Loader2 size={18} className="animate-spin" />
+                                  Opening Editor...
+                                </>
+                              ) : (
+                                <>
+                                  <ExternalLink size={18} />
+                                  Open Editor
+                                </>
+                              )}
+                            </button>
+
+                            {/* Refresh Files Button - Only show when editing to get updated files */}
+                            {manuscript.status === 'editing' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleFinalize(manuscript);
+                                }}
+                                disabled={finalizingFile === manuscript.id}
+                                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold border-2 transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:hover:scale-100"
+                                style={{
+                                  backgroundColor: '#e8f3f9',
+                                  borderColor: '#6890b8',
+                                  color: '#4f7299'
+                                }}
+                              >
+                                {finalizingFile === manuscript.id ? (
+                                  <>
+                                    <Loader2 size={18} className="animate-spin" />
+                                    Refreshing...
+                                  </>
+                                ) : (
+                                  <>
+                                    <RefreshCw size={18} />
+                                    Refresh Files
+                                  </>
+                                )}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Editor URL if available */}
+                          {manuscript.editor_url && (
+                            <div className="mt-3 p-2 bg-white rounded border border-green-200">
+                              <p className="text-xs text-gray-500">
+                                Editor URL: <a href={manuscript.editor_url} target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">{manuscript.editor_url}</a>
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Action Sections */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Download Section */}
@@ -486,6 +694,11 @@ export const Manuscripts = () => {
                             <div className="space-y-2">
                               {manuscript.output_files.map((file, index) => {
                                 const fileExt = file.fileName.split('.').pop().toUpperCase();
+                                const isValidationReport = file.downloadType === 'validation_report' ||
+                                  file.fileName.includes('_validation_report');
+                                const isRittdocPackage = file.downloadType === 'rittdoc_package' ||
+                                  file.fileName.includes('_rittdoc.zip');
+
                                 return (
                                   <button
                                     key={index}
@@ -493,38 +706,62 @@ export const Manuscripts = () => {
                                       e.stopPropagation();
                                       handleDownload(manuscript, file.fileName);
                                     }}
-                                    className="w-full flex items-center justify-between px-4 py-3 bg-white rounded-lg hover:bg-blue-50 transition-all duration-200 group"
-                                    style={{
-                                      border: '1px solid #6890b8'
-                                    }}
+                                    className={`w-full flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200 group ${
+                                      isValidationReport
+                                        ? 'bg-amber-50 hover:bg-amber-100 border-2 border-amber-400'
+                                        : isRittdocPackage
+                                        ? 'bg-green-50 hover:bg-green-100 border-2 border-green-400'
+                                        : 'bg-white hover:bg-blue-50 border border-gray-300'
+                                    }`}
                                   >
                                     <div className="flex items-center gap-3">
-                                      <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ backgroundColor: '#e8f3f9' }}>
-                                        <FileText size={20} style={{ color: '#4f7299' }} />
+                                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                                        isValidationReport
+                                          ? 'bg-amber-100'
+                                          : isRittdocPackage
+                                          ? 'bg-green-100'
+                                          : ''
+                                      }`} style={!isValidationReport && !isRittdocPackage ? { backgroundColor: '#e8f3f9' } : {}}>
+                                        {isValidationReport ? (
+                                          <FileSpreadsheet size={20} className="text-amber-600" />
+                                        ) : (
+                                          <FileText size={20} style={{ color: isRittdocPackage ? '#16a34a' : '#4f7299' }} />
+                                        )}
                                       </div>
                                       <div className="text-left">
-                                        <p className="font-semibold text-gray-900 text-sm break-all">
+                                        <p className={`font-semibold text-sm break-all ${
+                                          isValidationReport ? 'text-amber-800' : isRittdocPackage ? 'text-green-800' : 'text-gray-900'
+                                        }`}>
                                           {file.fileName}
                                         </p>
                                         <p className="text-xs text-gray-500">
+                                          {isValidationReport && <span className="text-amber-600 font-medium">Validation Report • </span>}
+                                          {isRittdocPackage && <span className="text-green-600 font-medium">Final Package • </span>}
                                           {fileExt} Format • {formatFileSize(file.fileSize)}
                                         </p>
                                       </div>
                                     </div>
-                                    <ChevronRight className="group-hover:translate-x-1 transition-transform" size={20} style={{ color: '#4f7299' }} />
+                                    <ChevronRight className={`group-hover:translate-x-1 transition-transform ${
+                                      isValidationReport ? 'text-amber-500' : isRittdocPackage ? 'text-green-500' : ''
+                                    }`} size={20} style={!isValidationReport && !isRittdocPackage ? { color: '#4f7299' } : {}} />
                                   </button>
                                 );
                               })}
                             </div>
                           ) : (
                             <div className="text-center py-4">
-                              {(manuscript.status === 'processing' || manuscript.status === 'uploaded') && (
+                              {(manuscript.status === 'processing' || manuscript.status === 'uploaded' || manuscript.status === 'pending') && (
                                 <Clock className="mx-auto text-gray-400 mb-2" size={24} />
                               )}
+                              {manuscript.status === 'editing' && (
+                                <Edit3 className="mx-auto text-orange-400 mb-2" size={24} />
+                              )}
                               <p className="text-sm text-gray-600">
-                                {manuscript.status === 'processing' || manuscript.status === 'uploaded'
-                                  ? 'Files will be available after processing'
-                                  : manuscript.status === 'failed'
+                                {manuscript.status === 'processing' || manuscript.status === 'uploaded' || manuscript.status === 'pending'
+                                  ? 'Files will be available after processing completes'
+                                  : manuscript.status === 'editing'
+                                  ? 'Save changes in editor, then click "Refresh Files" to update'
+                                  : manuscript.status === 'failed' || manuscript.status === 'cancelled'
                                   ? 'No files available due to error'
                                   : 'Processing not started'}
                               </p>
@@ -602,15 +839,125 @@ export const Manuscripts = () => {
                 </div>
               ) : (
                 <>
-                  <FileUpload onFileSelect={handleFileSelect} accept=".pdf,.epub" maxSize={524288000} />
+                  {!selectedFile ? (
+                    <FileUpload onFileSelect={handleFileSelect} accept=".pdf,.epub" maxSize={524288000} />
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Selected File Display */}
+                      <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <File size={24} className="text-green-600" />
+                            <div>
+                              <p className="font-semibold text-gray-900">{selectedFile.name}</p>
+                              <p className="text-sm text-gray-500">
+                                {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => setSelectedFile(null)}
+                            className="p-1 hover:bg-green-100 rounded-full transition-colors"
+                          >
+                            <X size={20} className="text-gray-500" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Output Folder Path Input */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          <div className="flex items-center gap-2">
+                            <FolderOpen size={16} />
+                            Output Folder Path (Optional)
+                          </div>
+                        </label>
+                        <input
+                          type="text"
+                          value={outputFolderPath}
+                          onChange={(e) => setOutputFolderPath(e.target.value)}
+                          placeholder="/path/to/output/folder"
+                          className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition-all"
+                          style={{ '--tw-ring-color': '#6890b8' }}
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          Output files will be saved to a subfolder named with the ISBN number
+                        </p>
+                      </div>
+
+                      {/* Metadata File Input - Only for PDF files */}
+                      {selectedFile?.name?.toLowerCase().endsWith('.pdf') && (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            <div className="flex items-center gap-2">
+                              <FileSpreadsheet size={16} />
+                              Metadata File (Optional)
+                            </div>
+                          </label>
+                          {!metadataFile ? (
+                            <div className="relative">
+                              <input
+                                type="file"
+                                accept=".csv,.xml"
+                                onChange={(e) => {
+                                  if (e.target.files?.[0]) {
+                                    setMetadataFile(e.target.files[0]);
+                                  }
+                                }}
+                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition-all file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                                style={{ '--tw-ring-color': '#6890b8' }}
+                              />
+                              <p className="mt-1 text-xs text-gray-500">
+                                Upload a CSV or ONIX XML file with book metadata (ISBN, title, authors, publisher)
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <FileSpreadsheet size={18} className="text-amber-600" />
+                                  <span className="text-sm font-medium text-amber-800">{metadataFile.name}</span>
+                                  <span className="text-xs text-amber-600">
+                                    ({(metadataFile.size / 1024).toFixed(1)} KB)
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => setMetadataFile(null)}
+                                  className="p-1 hover:bg-amber-100 rounded-full transition-colors"
+                                >
+                                  <X size={16} className="text-amber-600" />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="mt-6 flex gap-3">
                     <button
                       type="button"
-                      onClick={() => setShowUploadModal(false)}
+                      onClick={() => {
+                        setShowUploadModal(false);
+                        setSelectedFile(null);
+                        setMetadataFile(null);
+                        setOutputFolderPath('');
+                      }}
                       className="flex-1 px-4 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-50 transition-all"
                     >
                       Cancel
                     </button>
+                    {selectedFile && (
+                      <button
+                        type="button"
+                        onClick={handleUploadConfirm}
+                        className="flex-1 px-4 py-3 text-white rounded-lg font-semibold transition-all hover:scale-105"
+                        style={{ backgroundColor: '#4f7299' }}
+                      >
+                        Upload & Process
+                      </button>
+                    )}
                   </div>
                 </>
               )}

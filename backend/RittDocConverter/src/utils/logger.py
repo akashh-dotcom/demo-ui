@@ -7,6 +7,12 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+# Silence chatty third-party loggers
+logging.getLogger("pymongo").setLevel(logging.WARNING)
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("botocore").setLevel(logging.WARNING)
+logging.getLogger("s3transfer").setLevel(logging.WARNING)
+
 
 def setup_logger(
     name: str,
