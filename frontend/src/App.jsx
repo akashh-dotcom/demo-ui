@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { ThemeProvider } from './contexts/ThemeContext';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { SocketProvider } from './contexts/SocketContext';
@@ -31,6 +32,7 @@ function ProtectedPageLayout({ children, title, requireAdmin = false }) {
 
 function App() {
   return (
+    <ThemeProvider>
     <BrowserRouter>
       <NotificationProvider>
         <AuthProvider>
@@ -133,6 +135,7 @@ function App() {
         </AuthProvider>
       </NotificationProvider>
     </BrowserRouter>
+    </ThemeProvider>
   );
 }
 

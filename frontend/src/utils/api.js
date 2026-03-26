@@ -698,5 +698,15 @@ export const getBatchStatus = async (batchId) => {
   return response.data;
 };
 
+/**
+ * Get QA report for a file
+ * @param {String} fileId - File ID
+ * @returns {Promise} - QA report data
+ */
+export const getQAReport = async (fileId) => {
+  const response = await api.get(`/files/${fileId}/qa-report`);
+  return response.data;
+};
+
 // Export axios instance as default for custom requests
 export default api;

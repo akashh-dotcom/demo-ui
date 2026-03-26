@@ -13,33 +13,47 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  .dark body,
+  body.dark {
+    @apply bg-secondary-900 text-secondary-100;
+  }
+
+  /* When darkMode: 'class' is on <html>, body gets dark via descendant */
+  .dark body {
+    @apply bg-secondary-900 text-secondary-100;
+  }
+
   code {
     font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
       monospace;
   }
 
   h1, h2, h3, h4, h5, h6 {
-    @apply text-secondary-900 font-semibold;
+    @apply text-secondary-900 font-semibold dark:text-secondary-100;
   }
 }
 
 @layer components {
   /* R2Library-inspired button styles */
   .btn-primary {
-    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-md transition-colors shadow-sm;
+    @apply bg-primary-600 hover:bg-primary-700 text-white font-medium px-4 py-2 rounded-md transition-colors shadow-sm
+           dark:bg-primary-500 dark:hover:bg-primary-400;
   }
 
   .btn-secondary {
-    @apply bg-white hover:bg-secondary-50 text-secondary-700 font-medium px-4 py-2 rounded-md border border-secondary-300 transition-colors;
+    @apply bg-white hover:bg-secondary-50 text-secondary-700 font-medium px-4 py-2 rounded-md border border-secondary-300 transition-colors
+           dark:bg-secondary-700 dark:text-secondary-200 dark:border-secondary-600 dark:hover:bg-secondary-600;
   }
 
   /* Card styles for clean, professional look */
   .card {
-    @apply bg-white rounded-lg shadow-card border border-secondary-200;
+    @apply bg-white rounded-lg shadow-card border border-secondary-200
+           dark:bg-secondary-800 dark:border-secondary-700;
   }
 
   /* Input styles */
   .input-field {
-    @apply w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent;
+    @apply w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
+           dark:bg-secondary-800 dark:border-secondary-600 dark:text-secondary-100 dark:placeholder-secondary-400;
   }
 }

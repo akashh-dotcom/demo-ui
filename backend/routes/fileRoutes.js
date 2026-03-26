@@ -18,7 +18,8 @@ const {
   batchUpload,
   batchDelete,
   batchDownload,
-  getBatchStatus
+  getBatchStatus,
+  getQAReport
 } = require('../controllers/fileController');
 const { authenticate, authorizeAdmin } = require('../middleware/auth');
 const { upload, batchUpload: batchUploadMiddleware, handleMulterError } = require('../middleware/upload');
@@ -65,6 +66,9 @@ router.get('/all', authorizeAdmin, getAllFiles);
 
 // Get file by ID
 router.get('/:id', getFileById);
+
+// Get QA report for a file
+router.get('/:id/qa-report', getQAReport);
 
 // Download output file
 router.get('/:id/download/:fileName', downloadOutputFile);

@@ -24,6 +24,7 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import useCostAnalytics from '../hooks/useCostAnalytics';
+import useExportReport from '../hooks/useExportReport';
 import DataTable from '../components/shared/DataTable';
 import FilterBar from '../components/shared/FilterBar';
 import CostDisplay from '../components/shared/CostDisplay';
@@ -63,12 +64,12 @@ function formatDateFull(dateStr) {
 // Skeleton card loader
 function SkeletonCard() {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 animate-pulse">
+    <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-lg p-6 animate-pulse">
       <div className="flex items-center">
-        <div className="w-12 h-12 bg-secondary-200 rounded-lg" />
+        <div className="w-12 h-12 bg-secondary-200 dark:bg-secondary-700 rounded-lg" />
         <div className="ml-4 flex-1">
-          <div className="h-3 bg-secondary-200 rounded w-20 mb-2" />
-          <div className="h-6 bg-secondary-200 rounded w-24" />
+          <div className="h-3 bg-secondary-200 dark:bg-secondary-700 rounded w-20 mb-2" />
+          <div className="h-6 bg-secondary-200 dark:bg-secondary-700 rounded w-24" />
         </div>
       </div>
     </div>
@@ -77,9 +78,9 @@ function SkeletonCard() {
 
 function SkeletonChart() {
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 animate-pulse">
-      <div className="h-5 bg-secondary-200 rounded w-40 mb-6" />
-      <div className="h-64 bg-secondary-100 rounded" />
+    <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-lg p-6 animate-pulse">
+      <div className="h-5 bg-secondary-200 dark:bg-secondary-700 rounded w-40 mb-6" />
+      <div className="h-64 bg-secondary-100 dark:bg-secondary-700 rounded" />
     </div>
   );
 }
@@ -88,8 +89,8 @@ function SkeletonChart() {
 function CostTooltip({ active, payload, label }) {
   if (!active || !payload || !payload.length) return null;
   return (
-    <div className="bg-white px-4 py-3 border-2 rounded-lg shadow-xl" style={{ borderColor: '#6890b8' }}>
-      <p className="text-sm font-semibold text-secondary-900">{label}</p>
+    <div className="bg-white dark:bg-secondary-700 px-4 py-3 border-2 rounded-lg shadow-xl border-primary-500">
+      <p className="text-sm font-semibold text-secondary-900 dark:text-secondary-100">{label}</p>
       {payload.map((entry, idx) => (
         <p key={idx} className="text-sm" style={{ color: entry.color }}>
           {entry.name}: {formatCurrency(entry.value)}
@@ -101,6 +102,7 @@ function CostTooltip({ active, payload, label }) {
 
 function CostAnalytics() {
   const { summary, analytics, loading, error, fetchAll, fetchAnalytics } = useCostAnalytics();
+  const { exportCostReport } = useExportReport();
   const [range, setRange] = useState('30d');
   const [filters, setFilters] = useState({});
   const [tablePage, setTablePage] = useState(1);
@@ -342,16 +344,28 @@ function CostAnalytics() {
   const hasData = summary && (summary.totalSpend > 0 || records.length > 0);
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
+    <div className="min-h-screen bg-secondary-50 dark:bg-secondary-900">
       <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
         {/* Page Header */}
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold" style={{ color: '#2c3e50' }}>
-            Cost Analytics
-          </h1>
-          <p className="mt-1 sm:mt-2 text-sm sm:text-base" style={{ color: '#6890b8' }}>
-            Track conversion costs, analyze spending patterns, and optimize your budget
-          </p>
+        <div className="mb-6 sm:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-secondary-900 dark:text-secondary-100">
+              Cost Analytics
+            </h1>
+            <p className="mt-1 sm:mt-2 text-sm sm:text-base text-primary-500 dark:text-primary-400">
+              Track conversion costs, analyze spending patterns, and optimize your budget
+            </p>
+          </div>
+          {summary && records.length > 0 && (
+            <button
+              onClick={() => exportCostReport({ summary, daily: dailyCostData, byModel: costByModelData, byPublisher: costByPublisherData, records })}
+              className="flex items-center gap-2 px-4 py-2.5 text-white rounded-lg font-medium text-sm shadow-md hover:shadow-lg transition-all self-start sm:self-center"
+              style={{ backgroundColor: '#4f7299' }}
+            >
+              <Download className="w-4 h-4" />
+              Export Report
+            </button>
+          )}
         </div>
 
         {/* Loading skeleton */}
@@ -369,22 +383,22 @@ function CostAnalytics() {
 
         {/* Error state */}
         {error && !loading && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 mb-6 text-center">
-            <p className="text-red-700 font-medium">Failed to load cost data</p>
-            <p className="text-red-500 text-sm mt-1">{error}</p>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6 mb-6 text-center">
+            <p className="text-red-700 dark:text-red-400 font-medium">Failed to load cost data</p>
+            <p className="text-red-500 dark:text-red-400/80 text-sm mt-1">{error}</p>
           </div>
         )}
 
         {/* Empty state */}
         {!loading && !error && !hasData && summary !== null && (
           <div className="flex flex-col items-center justify-center min-h-[50vh] text-center">
-            <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mb-4">
-              <DollarSign className="w-8 h-8" style={{ color: '#6890b8' }} />
+            <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-primary-900/30 flex items-center justify-center mb-4">
+              <DollarSign className="w-8 h-8 text-primary-500" />
             </div>
-            <h2 className="text-2xl font-semibold text-secondary-900 mb-2">
+            <h2 className="text-2xl font-semibold text-secondary-900 dark:text-secondary-100 mb-2">
               No conversion data yet
             </h2>
-            <p className="text-secondary-500 max-w-md">
+            <p className="text-secondary-500 dark:text-secondary-400 max-w-md">
               Cost analytics will appear here once you start converting manuscripts.
             </p>
           </div>
@@ -398,7 +412,7 @@ function CostAnalytics() {
               {summaryCards.map((card) => (
                 <div
                   key={card.label}
-                  className="bg-white rounded-xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
+                  className="bg-white dark:bg-secondary-800 rounded-xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
                   style={{ borderLeft: `4px solid ${card.color}` }}
                 >
                   <div className="flex items-center">
@@ -409,8 +423,8 @@ function CostAnalytics() {
                       {card.icon}
                     </div>
                     <div className="ml-3 sm:ml-4">
-                      <p className="text-xs sm:text-sm font-medium text-gray-500">{card.label}</p>
-                      <p className="text-lg sm:text-2xl font-bold" style={{ color: '#2c3e50' }}>
+                      <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-secondary-400">{card.label}</p>
+                      <p className="text-lg sm:text-2xl font-bold text-secondary-900 dark:text-secondary-100">
                         {formatCurrency(card.value)}
                       </p>
                     </div>
@@ -422,9 +436,9 @@ function CostAnalytics() {
             {/* Row 2: Cost Over Time + Pie */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6 sm:mb-8">
               {/* Area Chart */}
-              <div className="lg:col-span-2 bg-white rounded-xl shadow-lg p-6">
+              <div className="lg:col-span-2 bg-white dark:bg-secondary-800 rounded-xl shadow-lg p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg sm:text-xl font-bold flex items-center" style={{ color: '#2c3e50' }}>
+                  <h2 className="text-lg sm:text-xl font-bold flex items-center text-secondary-900 dark:text-secondary-100">
                     <span className="rounded-lg p-2 mr-3" style={{ backgroundColor: '#e8f3f9' }}>
                       <TrendingUp className="w-5 h-5" style={{ color: '#6890b8' }} />
                     </span>
@@ -499,10 +513,10 @@ function CostAnalytics() {
               </div>
 
               {/* Pie Chart */}
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-lg sm:text-xl font-bold flex items-center mb-6" style={{ color: '#2c3e50' }}>
-                  <span className="rounded-lg p-2 mr-3" style={{ backgroundColor: '#e8f3f9' }}>
-                    <PieChartIcon className="w-5 h-5" style={{ color: '#4f7299' }} />
+              <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-lg p-6">
+                <h2 className="text-lg sm:text-xl font-bold flex items-center mb-6 text-secondary-900 dark:text-secondary-100">
+                  <span className="rounded-lg p-2 mr-3 bg-primary-50 dark:bg-primary-900/30">
+                    <PieChartIcon className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                   </span>
                   Cost By Type
                 </h2>
@@ -538,10 +552,10 @@ function CostAnalytics() {
             {/* Row 3: Cost By Model + Cost By Publisher */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 sm:mb-8">
               {/* By Model */}
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-lg sm:text-xl font-bold flex items-center mb-6" style={{ color: '#2c3e50' }}>
-                  <span className="rounded-lg p-2 mr-3" style={{ backgroundColor: '#e8f3f9' }}>
-                    <BarChart3 className="w-5 h-5" style={{ color: '#6890b8' }} />
+              <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-lg p-6">
+                <h2 className="text-lg sm:text-xl font-bold flex items-center mb-6 text-secondary-900 dark:text-secondary-100">
+                  <span className="rounded-lg p-2 mr-3 bg-primary-50 dark:bg-primary-900/30">
+                    <BarChart3 className="w-5 h-5 text-primary-500" />
                   </span>
                   Cost By Model
                 </h2>
@@ -579,10 +593,10 @@ function CostAnalytics() {
               </div>
 
               {/* By Publisher */}
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-lg sm:text-xl font-bold flex items-center mb-6" style={{ color: '#2c3e50' }}>
-                  <span className="rounded-lg p-2 mr-3" style={{ backgroundColor: '#e8f3f9' }}>
-                    <BarChart3 className="w-5 h-5" style={{ color: '#4f7299' }} />
+              <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-lg p-6">
+                <h2 className="text-lg sm:text-xl font-bold flex items-center mb-6 text-secondary-900 dark:text-secondary-100">
+                  <span className="rounded-lg p-2 mr-3 bg-primary-50 dark:bg-primary-900/30">
+                    <BarChart3 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                   </span>
                   Cost By Publisher (Top 10)
                 </h2>

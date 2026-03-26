@@ -240,24 +240,24 @@ function BatchOperations() {
   ];
 
   return (
-    <div className="p-6 lg:p-8 space-y-8">
+    <div className="p-6 lg:p-8 space-y-8 bg-secondary-50 dark:bg-secondary-900 min-h-screen">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-secondary-900 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <Layers className="w-5 h-5 text-purple-600" />
+          <h1 className="text-2xl font-bold text-secondary-900 dark:text-secondary-100 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+              <Layers className="w-5 h-5 text-purple-600 dark:text-purple-400" />
             </div>
             Batch Operations
           </h1>
-          <p className="text-secondary-500 mt-1">
+          <p className="text-secondary-500 dark:text-secondary-400 mt-1">
             Upload, manage, and process multiple files at once
           </p>
         </div>
         <button
           onClick={loadBatchFiles}
           disabled={loadingFiles}
-          className="flex items-center gap-2 px-4 py-2 text-purple-600 border border-purple-600 rounded-lg hover:bg-purple-50 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 text-purple-600 dark:text-purple-400 border border-purple-600 dark:border-purple-500 rounded-lg hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors disabled:opacity-50"
         >
           <RefreshCw size={18} className={loadingFiles ? 'animate-spin' : ''} />
           Refresh
@@ -265,8 +265,8 @@ function BatchOperations() {
       </div>
 
       {/* Batch Uploader */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Upload Files</h2>
+      <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-sm border border-gray-200 dark:border-secondary-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-secondary-100 mb-4">Upload Files</h2>
         <BatchUploader
           onUpload={handleUpload}
           uploading={uploading}
@@ -276,12 +276,12 @@ function BatchOperations() {
 
       {/* Active Batch Monitor */}
       {activeBatch && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-sm border border-gray-200 dark:border-secondary-700 p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">Active Batch</h2>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-secondary-100">Active Batch</h2>
             <button
               onClick={() => setActiveBatch(null)}
-              className="text-sm text-gray-500 hover:text-gray-700"
+              className="text-sm text-gray-500 hover:text-gray-700 dark:text-secondary-400 dark:hover:text-secondary-200"
             >
               Dismiss
             </button>
@@ -290,9 +290,9 @@ function BatchOperations() {
           {/* Progress summary */}
           {activeBatch.overall && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
-              <div className="bg-gray-50 rounded-lg p-3 text-center">
-                <p className="text-2xl font-bold text-gray-900">{activeBatch.overall.total}</p>
-                <p className="text-xs text-gray-500">Total</p>
+              <div className="bg-gray-50 dark:bg-secondary-700 rounded-lg p-3 text-center">
+                <p className="text-2xl font-bold text-gray-900 dark:text-secondary-100">{activeBatch.overall.total}</p>
+                <p className="text-xs text-gray-500 dark:text-secondary-400">Total</p>
               </div>
               <div className="bg-green-50 rounded-lg p-3 text-center">
                 <p className="text-2xl font-bold text-green-600">{activeBatch.overall.completed}</p>
@@ -313,8 +313,8 @@ function BatchOperations() {
           {activeBatch.files && activeBatch.files.length > 0 && (
             <div className="space-y-2 max-h-48 overflow-y-auto">
               {activeBatch.files.map((f) => (
-                <div key={f.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg">
-                  <span className="text-sm text-gray-700 truncate flex-1">{f.name}</span>
+                <div key={f.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-secondary-700 rounded-lg">
+                  <span className="text-sm text-gray-700 dark:text-secondary-300 truncate flex-1">{f.name}</span>
                   {statusLabel(f.status)}
                 </div>
               ))}
@@ -324,14 +324,14 @@ function BatchOperations() {
       )}
 
       {/* Batch Actions + File Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-sm border border-gray-200 dark:border-secondary-700">
         {/* Actions bar */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">All Files</h2>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-secondary-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-secondary-100">All Files</h2>
           <div className="flex items-center gap-2">
             {selectedIds.size > 0 && (
               <>
-                <span className="text-sm text-gray-500 mr-2">{selectedIds.size} selected</span>
+                <span className="text-sm text-gray-500 dark:text-secondary-400 mr-2">{selectedIds.size} selected</span>
                 <button
                   onClick={handleBatchDownload}
                   disabled={downloading}
@@ -355,13 +355,13 @@ function BatchOperations() {
 
         {/* Batch History quick links */}
         {batches.length > 0 && (
-          <div className="px-6 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap gap-2">
-            <span className="text-xs text-gray-500 py-1">Batches:</span>
+          <div className="px-6 py-3 bg-gray-50 dark:bg-secondary-700/30 border-b border-gray-200 dark:border-secondary-700 flex flex-wrap gap-2">
+            <span className="text-xs text-gray-500 dark:text-secondary-400 py-1">Batches:</span>
             {batches.slice(0, 8).map((b) => (
               <button
                 key={b.batchId}
                 onClick={() => handleViewBatch(b)}
-                className="text-xs px-2.5 py-1 bg-white border border-gray-300 rounded-full hover:border-purple-400 hover:text-purple-600 transition-colors"
+                className="text-xs px-2.5 py-1 bg-white dark:bg-secondary-700 border border-gray-300 dark:border-secondary-600 rounded-full hover:border-purple-400 hover:text-purple-600 dark:text-secondary-300 dark:hover:text-purple-400 transition-colors"
               >
                 {b.batchId.slice(0, 16)}... ({b.files.length} files)
               </button>
@@ -385,11 +385,11 @@ function BatchOperations() {
 
       {/* Error display */}
       {batchError && (
-        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3">
           <AlertCircle className="text-red-500 flex-shrink-0 mt-0.5" size={20} />
           <div>
-            <p className="font-medium text-red-800">Error</p>
-            <p className="text-sm text-red-600">{batchError}</p>
+            <p className="font-medium text-red-800 dark:text-red-400">Error</p>
+            <p className="text-sm text-red-600 dark:text-red-400/80">{batchError}</p>
           </div>
         </div>
       )}

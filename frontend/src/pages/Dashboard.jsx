@@ -144,7 +144,7 @@ export const Dashboard = () => {
 
   const StatCard = ({ icon, title, value, color, borderColor }) => (
     <div
-      className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
+      className="bg-white dark:bg-secondary-800 rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
       style={{ borderLeft: `4px solid ${borderColor}` }}
     >
       <div className="flex items-center">
@@ -155,8 +155,8 @@ export const Dashboard = () => {
           {icon}
         </div>
         <div className="ml-3 sm:ml-5">
-          <p className="text-xs sm:text-sm font-medium text-gray-600">{title}</p>
-          <p className="text-xl sm:text-2xl font-semibold" style={{ color: color === '#6890b8' ? '#2c3e50' : color }}>
+          <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-secondary-400">{title}</p>
+          <p className="text-xl sm:text-2xl font-semibold text-secondary-900 dark:text-secondary-100">
             {value}
           </p>
         </div>
@@ -167,22 +167,22 @@ export const Dashboard = () => {
   const CostTrendMiniTooltip = ({ active, payload }) => {
     if (!active || !payload || !payload.length) return null;
     return (
-      <div className="bg-white px-3 py-2 border rounded-lg shadow-md text-xs">
-        <p className="font-medium">{payload[0].payload.date}</p>
-        <p style={{ color: '#6890b8' }}>${Number(payload[0].value).toFixed(2)}</p>
+      <div className="bg-white dark:bg-secondary-700 px-3 py-2 border dark:border-secondary-600 rounded-lg shadow-md text-xs">
+        <p className="font-medium dark:text-secondary-100">{payload[0].payload.date}</p>
+        <p className="text-primary-500">${Number(payload[0].value).toFixed(2)}</p>
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
+    <div className="min-h-screen bg-secondary-50 dark:bg-secondary-900">
       <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold" style={{ color: '#2c3e50' }}>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-secondary-900 dark:text-secondary-100">
             Welcome, {getUserDisplayName()}!
           </h1>
-          <p className="mt-1 sm:mt-2 text-sm sm:text-base" style={{ color: '#6890b8' }}>
+          <p className="mt-1 sm:mt-2 text-sm sm:text-base text-primary-500 dark:text-primary-400">
             Here's an overview of your manuscript processing activity
           </p>
         </div>
@@ -254,7 +254,7 @@ export const Dashboard = () => {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 md:gap-6 mb-6 sm:mb-8">
           {/* Total AI Cost card */}
           <div
-            className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
+            className="bg-white dark:bg-secondary-800 rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
             style={{ borderLeft: '4px solid #4f7299' }}
           >
             <div className="flex items-center">
@@ -262,8 +262,8 @@ export const Dashboard = () => {
                 <DollarSign className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div className="ml-3 sm:ml-5">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">Total AI Cost</p>
-                <p className="text-xl sm:text-2xl font-semibold" style={{ color: '#2c3e50' }}>
+                <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-secondary-400">Total AI Cost</p>
+                <p className="text-xl sm:text-2xl font-semibold text-secondary-900 dark:text-secondary-100">
                   {costData.totalCost != null ? `$${Number(costData.totalCost).toFixed(2)}` : '—'}
                 </p>
               </div>
@@ -272,7 +272,7 @@ export const Dashboard = () => {
 
           {/* Avg Cost/Book card */}
           <div
-            className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
+            className="bg-white dark:bg-secondary-800 rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
             style={{ borderLeft: '4px solid #3d5b7a' }}
           >
             <div className="flex items-center">
@@ -280,8 +280,8 @@ export const Dashboard = () => {
                 <TrendingUp className="h-5 w-5 sm:h-6 sm:w-6 text-white" />
               </div>
               <div className="ml-3 sm:ml-5">
-                <p className="text-xs sm:text-sm font-medium text-gray-600">Avg Cost/Book</p>
-                <p className="text-xl sm:text-2xl font-semibold" style={{ color: '#2c3e50' }}>
+                <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-secondary-400">Avg Cost/Book</p>
+                <p className="text-xl sm:text-2xl font-semibold text-secondary-900 dark:text-secondary-100">
                   {costData.avgCostPerBook != null ? `$${Number(costData.avgCostPerBook).toFixed(2)}` : '—'}
                 </p>
               </div>
@@ -290,10 +290,10 @@ export const Dashboard = () => {
 
           {/* Cost Trend Mini Chart */}
           <div
-            className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
+            className="bg-white dark:bg-secondary-800 rounded-lg sm:rounded-xl shadow-md sm:shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow"
             style={{ borderLeft: '4px solid #6890b8' }}
           >
-            <p className="text-xs sm:text-sm font-medium text-gray-600 mb-2">Cost Trend (7 days)</p>
+            <p className="text-xs sm:text-sm font-medium text-gray-600 dark:text-secondary-400 mb-2">Cost Trend (7 days)</p>
             {costData.trend && costData.trend.length > 0 ? (
               <ResponsiveContainer width="100%" height={60}>
                 <AreaChart data={costData.trend} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
@@ -315,7 +315,7 @@ export const Dashboard = () => {
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-[60px] text-gray-400 text-xs">
+              <div className="flex items-center justify-center h-[60px] text-gray-400 dark:text-secondary-500 text-xs">
                 No trend data
               </div>
             )}
@@ -323,9 +323,9 @@ export const Dashboard = () => {
         </div>
 
         {/* Recent Manuscripts Table */}
-        <div className="bg-white rounded-lg sm:rounded-xl shadow-md sm:shadow-lg overflow-hidden">
-          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
-            <h2 className="text-lg sm:text-xl font-semibold" style={{ color: '#2c3e50' }}>
+        <div className="bg-white dark:bg-secondary-800 rounded-lg sm:rounded-xl shadow-md sm:shadow-lg overflow-hidden">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-secondary-700">
+            <h2 className="text-lg sm:text-xl font-semibold text-secondary-900 dark:text-secondary-100">
               Recent Manuscripts
             </h2>
           </div>
@@ -334,14 +334,13 @@ export const Dashboard = () => {
               <Loading />
             ) : recentManuscripts.length === 0 ? (
               <div className="text-center py-6 sm:py-8">
-                <svg className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400 mb-3 sm:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-gray-400 dark:text-secondary-500 mb-3 sm:mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <p className="text-sm sm:text-base text-gray-500 mb-3 sm:mb-4">No manuscripts yet</p>
+                <p className="text-sm sm:text-base text-gray-500 dark:text-secondary-400 mb-3 sm:mb-4">No manuscripts yet</p>
                 <Link
                   to="/manuscripts"
-                  className="inline-block px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all"
-                  style={{ backgroundColor: '#4f7299' }}
+                  className="inline-block px-4 sm:px-6 py-2 sm:py-3 text-sm sm:text-base text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all bg-primary-600 hover:bg-primary-700"
                 >
                   Upload Your First Manuscript
                 </Link>
@@ -349,38 +348,38 @@ export const Dashboard = () => {
             ) : (
               <div className="overflow-x-auto -mx-3 sm:mx-0">
                 <div className="inline-block min-w-full align-middle">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-secondary-700">
+                    <thead className="bg-gray-50 dark:bg-secondary-700/50">
                       <tr>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-secondary-400 uppercase tracking-wider">
                           File Name
                         </th>
-                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-secondary-400 uppercase tracking-wider">
                           Status
                         </th>
-                        <th className="hidden md:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="hidden md:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-secondary-400 uppercase tracking-wider">
                           Cost
                         </th>
-                        <th className="hidden sm:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="hidden sm:table-cell px-3 sm:px-6 py-2 sm:py-3 text-left text-xs font-medium text-gray-500 dark:text-secondary-400 uppercase tracking-wider">
                           Upload Date
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-secondary-800 divide-y divide-gray-200 dark:divide-secondary-700">
                       {recentManuscripts.map((manuscript) => {
                         const uniqueKey = manuscript.id || manuscript._id || `manuscript-${Math.random()}`;
                         return (
-                          <tr key={uniqueKey} className="hover:bg-gray-50 transition">
+                          <tr key={uniqueKey} className="hover:bg-gray-50 dark:hover:bg-secondary-700/50 transition">
                             <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm">
                               <div className="flex items-center">
-                                <svg className="hidden sm:block w-5 h-5 text-gray-400 mr-2 sm:mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="hidden sm:block w-5 h-5 text-gray-400 dark:text-secondary-500 mr-2 sm:mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                                 </svg>
                                 <div className="min-w-0 flex-1">
-                                  <span className="font-medium text-gray-900 break-words line-clamp-2">
+                                  <span className="font-medium text-gray-900 dark:text-secondary-100 break-words line-clamp-2">
                                     {manuscript.file_name || manuscript.original_filename || manuscript.originalName || 'Unnamed File'}
                                   </span>
-                                  <div className="sm:hidden text-xs text-gray-500 mt-1">
+                                  <div className="sm:hidden text-xs text-gray-500 dark:text-secondary-400 mt-1">
                                     {formatDate(manuscript.upload_date || manuscript.created_at || manuscript.createdAt)}
                                   </div>
                                 </div>
@@ -399,7 +398,7 @@ export const Dashboard = () => {
                                 size="sm"
                               />
                             </td>
-                            <td className="hidden sm:table-cell px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600">
+                            <td className="hidden sm:table-cell px-3 sm:px-6 py-3 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-gray-600 dark:text-secondary-400">
                               {formatDate(manuscript.upload_date || manuscript.created_at || manuscript.createdAt)}
                             </td>
                           </tr>
@@ -412,11 +411,10 @@ export const Dashboard = () => {
             )}
           </div>
           {recentManuscripts.length > 0 && (
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 bg-gray-50">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-secondary-700 bg-gray-50 dark:bg-secondary-700/30">
               <Link
                 to="/manuscripts"
-                className="text-sm sm:text-base font-medium transition hover:underline"
-                style={{ color: '#4f7299' }}
+                className="text-sm sm:text-base font-medium transition hover:underline text-primary-600 dark:text-primary-400"
               >
                 View All Manuscripts →
               </Link>

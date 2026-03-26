@@ -35,7 +35,7 @@ function PageLayout({ children, title }) {
   const closeMobile = useCallback(() => setMobileOpen(false), []);
 
   return (
-    <div className="min-h-screen bg-secondary-50" onPointerMove={handlePointerMove}>
+    <div className="min-h-screen bg-secondary-50 dark:bg-secondary-900" onPointerMove={handlePointerMove}>
       <Sidebar mobileOpen={mobileOpen} onMobileClose={closeMobile} />
 
       {/* Main content area */}
@@ -47,10 +47,10 @@ function PageLayout({ children, title }) {
       >
         {/* Top bar for mobile */}
         {title && (
-          <header className="sticky top-0 z-20 bg-white border-b border-secondary-200 shadow-sm">
+          <header className="sticky top-0 z-20 bg-white dark:bg-secondary-800 border-b border-secondary-200 dark:border-secondary-700 shadow-sm">
             <div className="flex items-center h-16 px-4 sm:px-6 lg:px-8">
               <SidebarMobileTrigger onClick={openMobile} />
-              <h1 className="ml-2 lg:ml-0 text-xl font-semibold text-secondary-900 truncate">
+              <h1 className="ml-2 lg:ml-0 text-xl font-semibold text-secondary-900 dark:text-secondary-100 truncate">
                 {title}
               </h1>
             </div>
@@ -60,7 +60,7 @@ function PageLayout({ children, title }) {
         {/* Page content */}
         <main className={!title ? 'pt-0' : ''}>
           {!title && (
-            <div className="lg:hidden sticky top-0 z-20 bg-white border-b border-secondary-200 shadow-sm">
+            <div className="lg:hidden sticky top-0 z-20 bg-white dark:bg-secondary-800 border-b border-secondary-200 dark:border-secondary-700 shadow-sm">
               <div className="flex items-center h-14 px-4">
                 <SidebarMobileTrigger onClick={openMobile} />
               </div>

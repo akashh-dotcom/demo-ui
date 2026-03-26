@@ -23,9 +23,13 @@ import {
   Loader2,
   FolderOpen,
   FileSpreadsheet,
-  X
+  X,
+  ClipboardCheck,
+  FileDown,
 } from 'lucide-react';
 import { launchEditor, finalizeFile } from '../utils/api';
+import QAReportViewer from '../components/shared/QAReportViewer';
+import useExportReport from '../hooks/useExportReport';
 
 // Note: The PDF API no longer requires a separate "finalize" step.
 // Files are ready immediately when status = 'completed'.
@@ -47,7 +51,11 @@ export const Manuscripts = () => {
   const [outputFolderPath, setOutputFolderPath] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
   const [metadataFile, setMetadataFile] = useState(null);
+  const [qaReportFileId, setQaReportFileId] = useState(null);
+  const [qaReportFileName, setQaReportFileName] = useState('');
+  const [showExportMenu, setShowExportMenu] = useState(null);
   const hasLoadedInitially = useRef(false);
+  const { exportToExcel, exportToCsv } = useExportReport();
 
   // Initial load - ONLY ONCE
   useEffect(() => {
@@ -318,13 +326,13 @@ export const Manuscripts = () => {
   );
 
   return (
-    <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
+    <div className="min-h-screen bg-secondary-50 dark:bg-secondary-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header - Responsive */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">Manuscript Library</h1>
-            <p className="text-sm sm:text-base text-gray-600">Manage and convert your digital manuscripts</p>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-secondary-100 mb-1 sm:mb-2">Manuscript Library</h1>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-secondary-400">Manage and convert your digital manuscripts</p>
           </div>
           <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
             {/* Manual Refresh Button */}
@@ -378,7 +386,7 @@ export const Manuscripts = () => {
         )}
 
         {/* Search and Filter */}
-        <div className="bg-white rounded-xl shadow-card border border-gray-200 p-6 mb-6">
+        <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-card border border-gray-200 dark:border-secondary-700 p-6 mb-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="relative">
               <input
@@ -386,16 +394,16 @@ export const Manuscripts = () => {
                 placeholder="Search manuscripts by name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition-all"
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-secondary-600 dark:bg-secondary-700 dark:text-secondary-100 dark:placeholder-secondary-400 rounded-lg focus:ring-2 focus:border-transparent transition-all"
                 style={{ '--tw-ring-color': '#6890b8' }}
               />
-              <FileText className="absolute left-3 top-3.5 text-gray-400" size={20} />
+              <FileText className="absolute left-3 top-3.5 text-gray-400 dark:text-secondary-500" size={20} />
             </div>
             <div>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition-all"
+                className="w-full px-4 py-3 border border-gray-300 dark:border-secondary-600 dark:bg-secondary-700 dark:text-secondary-100 rounded-lg focus:ring-2 focus:border-transparent transition-all"
                 style={{ '--tw-ring-color': '#6890b8' }}
               >
                 <option value="all">All Status</option>
@@ -413,14 +421,14 @@ export const Manuscripts = () => {
         {/* Manuscripts List */}
         <div className="space-y-3">
           {loading ? (
-            <div className="bg-white rounded-xl shadow-card border border-gray-200 p-12">
+            <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-card border border-gray-200 dark:border-secondary-700 p-12">
               <Loading />
             </div>
           ) : filteredManuscripts.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-card border border-gray-200 p-12 text-center">
-              <File size={48} className="mx-auto text-gray-400 mb-4" />
-              <p className="text-gray-500 text-lg">No manuscripts found</p>
-              <p className="text-gray-400 text-sm mt-2">Upload your first manuscript to get started</p>
+            <div className="bg-white dark:bg-secondary-800 rounded-xl shadow-card border border-gray-200 dark:border-secondary-700 p-12 text-center">
+              <File size={48} className="mx-auto text-gray-400 dark:text-secondary-500 mb-4" />
+              <p className="text-gray-500 dark:text-secondary-400 text-lg">No manuscripts found</p>
+              <p className="text-gray-400 dark:text-secondary-500 text-sm mt-2">Upload your first manuscript to get started</p>
             </div>
           ) : (
             filteredManuscripts.map((manuscript) => {
@@ -432,12 +440,12 @@ export const Manuscripts = () => {
               return (
                 <div
                   key={manuscript.id}
-                  className="bg-white rounded-xl shadow-card border border-gray-200 hover:shadow-card-hover transition-all duration-200 animate-slide-in overflow-hidden"
+                  className="bg-white dark:bg-secondary-800 rounded-xl shadow-card border border-gray-200 dark:border-secondary-700 hover:shadow-card-hover transition-all duration-200 animate-slide-in overflow-hidden"
                 >
                   {/* Input File Row - Responsive */}
                   <div
                     onClick={() => toggleFileExpand(manuscript.id)}
-                    className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+                    className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 dark:hover:bg-secondary-700/50 transition-colors"
                   >
                     <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
                       {/* Mobile: Icon + Filename Row */}
@@ -455,10 +463,10 @@ export const Manuscripts = () => {
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-all mb-2">
+                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-secondary-100 break-all mb-2">
                             {manuscript.file_name}
                           </h3>
-                          <div className="flex flex-wrap gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600">
+                          <div className="flex flex-wrap gap-2 sm:gap-3 text-xs sm:text-sm text-gray-600 dark:text-secondary-400">
                             <span className="flex items-center gap-1">
                               <strong>Size:</strong> {formatFileSize(manuscript.file_size)}
                             </span>
@@ -500,10 +508,10 @@ export const Manuscripts = () => {
 
                   {/* Expanded Content */}
                   {isExpanded && (
-                    <div className="border-t border-gray-200 bg-gray-50 p-6 animate-slide-in">
+                    <div className="border-t border-gray-200 dark:border-secondary-700 bg-gray-50 dark:bg-secondary-700/30 p-6 animate-slide-in">
                       {/* Tracking Progress */}
                       <div className="mb-6">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-4">Processing Status</h4>
+                        <h4 className="text-sm font-semibold text-gray-700 dark:text-secondary-300 mb-4">Processing Status</h4>
                         <div className="relative">
                           <div className="flex items-center justify-between">
                             {trackingSteps.map((step, index) => {
@@ -679,8 +687,91 @@ export const Manuscripts = () => {
 
                       {/* Action Sections */}
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* QA & Export Row for completed files */}
+                        {manuscript.status === 'completed' && (
+                          <div className="md:col-span-2 flex flex-wrap gap-3">
+                            {/* QA Report Button */}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setQaReportFileId(manuscript.id);
+                                setQaReportFileName(manuscript.file_name);
+                              }}
+                              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm border-2 transition-all duration-200 hover:scale-105"
+                              style={{
+                                backgroundColor: '#f0fdf4',
+                                borderColor: '#22c55e',
+                                color: '#15803d',
+                              }}
+                            >
+                              <ClipboardCheck size={18} />
+                              QA Report
+                            </button>
+
+                            {/* Export Dropdown */}
+                            <div className="relative">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowExportMenu(showExportMenu === manuscript.id ? null : manuscript.id);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm border-2 transition-all duration-200 hover:scale-105"
+                                style={{
+                                  backgroundColor: '#e8f3f9',
+                                  borderColor: '#6890b8',
+                                  color: '#4f7299',
+                                }}
+                              >
+                                <FileDown size={18} />
+                                Export
+                                <ChevronDown size={14} />
+                              </button>
+                              {showExportMenu === manuscript.id && (
+                                <div className="absolute top-full left-0 mt-1 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-20 min-w-[160px]">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const cols = [
+                                        { key: 'file_name', label: 'File Name' },
+                                        { key: 'original_format', label: 'Format' },
+                                        { key: 'status', label: 'Status' },
+                                        { key: 'file_size', label: 'Size' },
+                                        { key: 'created_at', label: 'Uploaded' },
+                                      ];
+                                      exportToExcel([manuscript], cols, `${manuscript.file_name}-details.xlsx`);
+                                      setShowExportMenu(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                  >
+                                    <FileSpreadsheet size={14} />
+                                    Export as XLSX
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const cols = [
+                                        { key: 'file_name', label: 'File Name' },
+                                        { key: 'original_format', label: 'Format' },
+                                        { key: 'status', label: 'Status' },
+                                        { key: 'file_size', label: 'Size' },
+                                        { key: 'created_at', label: 'Uploaded' },
+                                      ];
+                                      exportToCsv([manuscript], cols, `${manuscript.file_name}-details.csv`);
+                                      setShowExportMenu(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                                  >
+                                    <FileText size={14} />
+                                    Export as CSV
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
                         {/* Download Section */}
-                        <div className="border-2 rounded-lg p-4" style={{ 
+                        <div className="border-2 rounded-lg p-4" style={{
                           backgroundColor: '#e8f3f9',
                           borderColor: '#6890b8'
                         }}>
@@ -807,14 +898,14 @@ export const Manuscripts = () => {
               className="fixed inset-0 transition-opacity bg-gray-900 bg-opacity-75 backdrop-blur-sm"
               onClick={() => !uploading && setShowUploadModal(false)}
             ></div>
-            <div className="inline-block align-bottom bg-white rounded-2xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
+            <div className="inline-block align-bottom bg-white dark:bg-secondary-800 rounded-2xl px-4 pt-5 pb-4 text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
               <div className="flex items-center gap-3 mb-6">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ backgroundColor: '#e8f3f9' }}>
-                  <Upload size={24} style={{ color: '#4f7299' }} />
+                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-primary-50 dark:bg-primary-900/30">
+                  <Upload size={24} className="text-primary-600 dark:text-primary-400" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold text-gray-900">Upload Manuscript</h3>
-                  <p className="text-sm text-gray-600">Select a PDF or EPUB file to upload</p>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-secondary-100">Upload Manuscript</h3>
+                  <p className="text-sm text-gray-600 dark:text-secondary-400">Select a PDF or EPUB file to upload</p>
                 </div>
               </div>
               {uploading ? (
@@ -973,6 +1064,17 @@ export const Manuscripts = () => {
         message={`Are you sure you want to delete "${deleteConfirm?.file_name}"? This action cannot be undone.`}
         confirmText="Delete Permanently"
         type="danger"
+      />
+
+      {/* QA Report Modal */}
+      <QAReportViewer
+        fileId={qaReportFileId}
+        fileName={qaReportFileName}
+        isOpen={!!qaReportFileId}
+        onClose={() => {
+          setQaReportFileId(null);
+          setQaReportFileName('');
+        }}
       />
     </div>
   );

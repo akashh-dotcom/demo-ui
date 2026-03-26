@@ -2,10 +2,12 @@ import { useState, useEffect } from 'react';
 import { getConversionRecords, getConversionStats } from '../../utils/api';
 import { useNotification } from '../../contexts/NotificationContext';
 import Loading from '../../components/shared/Loading';
+import useExportReport from '../../hooks/useExportReport';
 import * as XLSX from 'xlsx';
 
 export const ConversionDashboard = () => {
   const { handleError, showSuccess } = useNotification();
+  const { exportConversionReport } = useExportReport();
   const [records, setRecords] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -106,29 +108,9 @@ export const ConversionDashboard = () => {
       return;
     }
 
-    const exportData = records.map(record => ({
-      'File Name': record.fileName,
-      'File Type': record.fileType?.toUpperCase(),
-      'Status': getStatusLabel(record.status),
-      'ISBN': record.isbn || 'N/A',
-      'Title': record.title || 'N/A',
-      'Author': record.author || 'N/A',
-      'File Size': formatFileSize(record.fileSize),
-      'Uploaded By': record.uploadedByUsername || 'Unknown',
-      'Started At': formatDate(record.startedAt),
-      'Completed At': formatDate(record.completedAt),
-      'Processing Time': formatDuration(record.processingDurationSeconds),
-      'Output Files': record.outputCount || 0,
-      'Error': record.errorMessage || ''
-    }));
-
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    XLSX.utils.book_append_sheet(wb, ws, 'Conversions');
-
-    const fileName = `conversion_report_${new Date().toISOString().slice(0, 10)}.xlsx`;
-    XLSX.writeFile(wb, fileName);
-    showSuccess(`Exported ${records.length} records to ${fileName}`);
+    // Use the multi-sheet export from useExportReport
+    exportConversionReport(records);
+    showSuccess(`Exported ${records.length} records`);
   };
 
   const clearFilters = () => {

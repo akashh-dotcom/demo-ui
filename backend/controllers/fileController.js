@@ -2171,6 +2171,123 @@ const getBatchStatus = async (req, res) => {
   }
 };
 
+// @desc    Get QA report for a file
+// @route   GET /api/files/:id/qa-report
+// @access  Private
+const getQAReport = async (req, res) => {
+  try {
+    const file = await File.findById(req.params.id);
+
+    if (!file) {
+      return res.status(404).json({ success: false, message: 'File not found' });
+    }
+
+    // Check ownership or admin
+    if (file.uploadedBy.toString() !== req.user._id.toString() && req.user.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    }
+
+    // Look for QA-related output files
+    const qaFilePatterns = [
+      { key: 'confidence', pattern: /confidence_report\.json$/i },
+      { key: 'preflight', pattern: /preflight_report\.json$/i },
+      { key: 'postprocess', pattern: /postprocess_report\.json$/i },
+    ];
+
+    const qaData = {
+      qualityScore: null,
+      confidence: { overall: null, pages: [] },
+      preflight: {},
+      postprocess: {},
+      issues: [],
+      validationErrors: 0,
+      validationWarnings: 0,
+    };
+
+    // Try to read QA reports from output files stored in GridFS
+    for (const { key, pattern } of qaFilePatterns) {
+      const outputFile = (file.outputFiles || []).find((f) => pattern.test(f.fileName));
+      if (outputFile && outputFile.gridfsFileId && outputFile.storedInGridFS) {
+        try {
+          const { downloadStream } = await downloadFromGridFS(outputFile.gridfsFileId);
+          const chunks = [];
+          await new Promise((resolve, reject) => {
+            downloadStream.on('data', (chunk) => chunks.push(chunk));
+            downloadStream.on('end', resolve);
+            downloadStream.on('error', reject);
+          });
+          const jsonStr = Buffer.concat(chunks).toString('utf8');
+          const parsed = JSON.parse(jsonStr);
+
+          if (key === 'confidence') {
+            qaData.confidence.overall = parsed.overall ?? parsed.overallConfidence ?? parsed.score ?? null;
+            qaData.confidence.pages = parsed.pages || parsed.pageScores || [];
+            if (parsed.qualityScore != null) qaData.qualityScore = parsed.qualityScore;
+          } else if (key === 'preflight') {
+            qaData.preflight = parsed;
+          } else if (key === 'postprocess') {
+            qaData.postprocess = parsed;
+          }
+
+          // Extract issues from any report
+          if (Array.isArray(parsed.issues)) {
+            qaData.issues.push(...parsed.issues);
+          }
+          if (Array.isArray(parsed.errors)) {
+            qaData.issues.push(...parsed.errors.map((e) => ({
+              severity: 'HIGH',
+              message: typeof e === 'string' ? e : e.message || JSON.stringify(e),
+              ...(typeof e === 'object' ? e : {}),
+            })));
+          }
+          if (Array.isArray(parsed.warnings)) {
+            qaData.issues.push(...parsed.warnings.map((w) => ({
+              severity: 'MEDIUM',
+              message: typeof w === 'string' ? w : w.message || JSON.stringify(w),
+              ...(typeof w === 'object' ? w : {}),
+            })));
+          }
+        } catch (parseErr) {
+          console.error(`Failed to parse ${key} report:`, parseErr.message);
+        }
+      }
+    }
+
+    // Merge ConversionRecord quality data
+    try {
+      const convRecord = await ConversionRecord.findOne({ fileId: file._id }).sort({ createdAt: -1 });
+      if (convRecord) {
+        if (convRecord.quality) {
+          qaData.validationErrors = convRecord.quality.validationErrors ?? 0;
+          qaData.validationWarnings = convRecord.quality.validationWarnings ?? 0;
+          if (qaData.qualityScore == null && convRecord.quality.confidenceScore != null) {
+            qaData.qualityScore = convRecord.quality.confidenceScore;
+          }
+          if (qaData.confidence.overall == null && convRecord.quality.confidenceScore != null) {
+            qaData.confidence.overall = convRecord.quality.confidenceScore;
+          }
+        }
+      }
+    } catch (convErr) {
+      console.error('Failed to fetch ConversionRecord:', convErr.message);
+    }
+
+    // Derive quality score from confidence if still null
+    if (qaData.qualityScore == null && qaData.confidence.overall != null) {
+      qaData.qualityScore = qaData.confidence.overall;
+    }
+
+    res.json({ success: true, data: qaData });
+  } catch (error) {
+    console.error('Error getting QA report:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error getting QA report',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   uploadFile,
   getUserFiles,
@@ -2191,5 +2308,7 @@ module.exports = {
   batchUpload,
   batchDelete,
   batchDownload,
-  getBatchStatus
+  getBatchStatus,
+  // QA
+  getQAReport
 };

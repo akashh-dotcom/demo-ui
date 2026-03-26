@@ -27,18 +27,18 @@ export const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-secondary-50 py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex items-center justify-center bg-secondary-50 dark:bg-secondary-900 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
         <div className="text-center">
-          <h2 className="text-3xl font-bold text-secondary-900">
+          <h2 className="text-3xl font-bold text-secondary-900 dark:text-secondary-100">
             Manuscript Processor
           </h2>
-          <p className="mt-3 text-sm text-secondary-600">Sign in to your account</p>
+          <p className="mt-3 text-sm text-secondary-600 dark:text-secondary-400">Sign in to your account</p>
         </div>
-        <div className="bg-white rounded-lg shadow-card border border-secondary-200 p-8">
+        <div className="bg-white dark:bg-secondary-800 rounded-lg shadow-card border border-secondary-200 dark:border-secondary-700 p-8">
           <form className="space-y-6" onSubmit={handleSubmit}>
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-secondary-700 mb-2">
+              <label htmlFor="email" className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
                 Email address
               </label>
               <input
@@ -53,7 +53,7 @@ export const Login = () => {
               />
             </div>
             <div>
-              <label htmlFor="password" className="block text-sm font-medium text-secondary-700 mb-2">
+              <label htmlFor="password" className="block text-sm font-medium text-secondary-700 dark:text-secondary-300 mb-2">
                 Password
               </label>
               <input

@@ -14,7 +14,7 @@ function SkeletonRow({ colCount }) {
     <tr className="animate-pulse">
       {Array.from({ length: colCount }, (_, i) => (
         <td key={i} className="px-4 py-3">
-          <div className="h-4 bg-secondary-200 rounded w-3/4" />
+          <div className="h-4 bg-secondary-200 dark:bg-secondary-700 rounded w-3/4" />
         </td>
       ))}
     </tr>
@@ -150,13 +150,13 @@ function DataTable({
   };
 
   return (
-    <div className="bg-white rounded-lg border border-secondary-200 shadow-sm overflow-hidden">
+    <div className="bg-white dark:bg-secondary-800 rounded-lg border border-secondary-200 dark:border-secondary-700 shadow-sm overflow-hidden">
       {/* Export button */}
       {onExport && (
-        <div className="flex items-center justify-end px-4 py-2 border-b border-secondary-100">
+        <div className="flex items-center justify-end px-4 py-2 border-b border-secondary-100 dark:border-secondary-700">
           <button
             onClick={onExport}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-secondary-600 hover:text-secondary-900 hover:bg-secondary-100 rounded-md transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-secondary-600 dark:text-secondary-400 hover:text-secondary-900 dark:hover:text-secondary-100 hover:bg-secondary-100 dark:hover:bg-secondary-700 rounded-md transition-colors"
           >
             <Download className="w-4 h-4" />
             Export
@@ -168,7 +168,7 @@ function DataTable({
       <div className="overflow-x-auto">
         <table className="w-full">
           <thead>
-            <tr className="bg-secondary-50 border-b border-secondary-200">
+            <tr className="bg-secondary-50 dark:bg-secondary-700/50 border-b border-secondary-200 dark:border-secondary-700">
               {selectable && (
                 <th className="w-12 px-4 py-3">
                   <input
@@ -215,7 +215,7 @@ function DataTable({
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-secondary-100">
+          <tbody className="divide-y divide-secondary-100 dark:divide-secondary-700">
             {loading ? (
               Array.from({ length: 8 }, (_, i) => (
                 <SkeletonRow key={i} colCount={totalColumns} />
@@ -239,7 +239,7 @@ function DataTable({
                     key={rowId || rowIndex}
                     className={`
                       transition-colors duration-100
-                      ${isSelected ? 'bg-primary-50' : 'hover:bg-secondary-50'}
+                      ${isSelected ? 'bg-primary-50 dark:bg-primary-900/20' : 'hover:bg-secondary-50 dark:hover:bg-secondary-700/50'}
                     `}
                   >
                     {selectable && (
@@ -253,7 +253,7 @@ function DataTable({
                       </td>
                     )}
                     {columns.map((col) => (
-                      <td key={col.key} className="px-4 py-3 text-sm text-secondary-700">
+                      <td key={col.key} className="px-4 py-3 text-sm text-secondary-700 dark:text-secondary-300">
                         {col.render ? col.render(row) : row[col.key]}
                       </td>
                     ))}
@@ -272,7 +272,7 @@ function DataTable({
 
       {/* Pagination */}
       {pagination && pagination.totalPages > 0 && (
-        <div className="flex items-center justify-between px-4 py-3 border-t border-secondary-200 bg-secondary-50">
+        <div className="flex items-center justify-between px-4 py-3 border-t border-secondary-200 dark:border-secondary-700 bg-secondary-50 dark:bg-secondary-700/30">
           <div className="text-sm text-secondary-500">
             Showing{' '}
             <span className="font-medium text-secondary-700">

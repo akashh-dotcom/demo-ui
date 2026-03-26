@@ -17,8 +17,11 @@ import {
   Menu,
   X,
   LogOut,
+  Moon,
+  Sun,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const STORAGE_KEY = 'sidebar_collapsed';
 
@@ -112,6 +115,7 @@ function Sidebar({ mobileOpen, onMobileClose }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, getUserDisplayName } = useAuth();
+  const { isDark, toggleTheme } = useTheme();
   const sidebarRef = useRef(null);
 
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
@@ -234,7 +238,7 @@ function Sidebar({ mobileOpen, onMobileClose }) {
       </nav>
 
       {/* Footer / User section */}
-      <div className="border-t border-secondary-700 p-2 flex-shrink-0">
+      <div className="border-t border-secondary-700 dark:border-secondary-600 p-2 flex-shrink-0">
         {!collapsed && user && (
           <div className="px-3 py-2 mb-1">
             <p className="text-sm font-medium text-white truncate">
@@ -243,6 +247,38 @@ function Sidebar({ mobileOpen, onMobileClose }) {
             <p className="text-xs text-secondary-400 truncate">{user.email}</p>
           </div>
         )}
+        {/* Theme toggle */}
+        <button
+          onClick={toggleTheme}
+          className={`
+            group relative flex items-center w-full rounded-lg transition-all duration-200
+            text-secondary-300 hover:bg-secondary-700 hover:text-white
+            ${collapsed ? 'justify-center px-2 py-2.5' : 'px-3 py-2.5'}
+          `}
+          title={collapsed ? (isDark ? 'Switch to light mode' : 'Switch to dark mode') : undefined}
+        >
+          {isDark ? (
+            <Sun className={`flex-shrink-0 ${collapsed ? 'w-5 h-5' : 'w-5 h-5 mr-3'}`} />
+          ) : (
+            <Moon className={`flex-shrink-0 ${collapsed ? 'w-5 h-5' : 'w-5 h-5 mr-3'}`} />
+          )}
+          {!collapsed && (
+            <span className="text-sm font-medium">
+              {isDark ? 'Light Mode' : 'Dark Mode'}
+            </span>
+          )}
+          {collapsed && (
+            <div className="
+              absolute left-full ml-2 px-2.5 py-1.5 bg-secondary-900 text-white text-xs
+              rounded-md whitespace-nowrap opacity-0 invisible
+              group-hover:opacity-100 group-hover:visible
+              transition-all duration-200 z-50 pointer-events-none shadow-lg
+            ">
+              {isDark ? 'Light Mode' : 'Dark Mode'}
+              <div className="absolute top-1/2 -left-1 -translate-y-1/2 border-4 border-transparent border-r-secondary-900" />
+            </div>
+          )}
+        </button>
         <button
           onClick={handleLogout}
           className={`
@@ -384,6 +420,20 @@ function Sidebar({ mobileOpen, onMobileClose }) {
                     <p className="text-xs text-secondary-400 truncate">{user.email}</p>
                   </div>
                 )}
+                {/* Theme toggle (mobile) */}
+                <button
+                  onClick={toggleTheme}
+                  className="flex items-center w-full rounded-lg px-3 py-2.5 text-secondary-300 hover:bg-secondary-700 hover:text-white transition-all duration-200"
+                >
+                  {isDark ? (
+                    <Sun className="w-5 h-5 mr-3 flex-shrink-0" />
+                  ) : (
+                    <Moon className="w-5 h-5 mr-3 flex-shrink-0" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {isDark ? 'Light Mode' : 'Dark Mode'}
+                  </span>
+                </button>
                 <button
                   onClick={handleLogout}
                   className="flex items-center w-full rounded-lg px-3 py-2.5 text-secondary-300 hover:bg-red-500/20 hover:text-red-400 transition-all duration-200"
@@ -405,7 +455,7 @@ export function SidebarMobileTrigger({ onClick }) {
   return (
     <button
       onClick={onClick}
-      className="lg:hidden p-2 rounded-md text-secondary-500 hover:text-secondary-700 hover:bg-secondary-100 transition-colors"
+      className="lg:hidden p-2 rounded-md text-secondary-500 hover:text-secondary-700 hover:bg-secondary-100 dark:text-secondary-400 dark:hover:text-secondary-200 dark:hover:bg-secondary-700 transition-colors"
       aria-label="Open sidebar"
     >
       <Menu className="w-6 h-6" />
