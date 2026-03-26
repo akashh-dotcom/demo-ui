@@ -36,9 +36,13 @@ RUN pip install --upgrade pip setuptools wheel && \
       -r RittDocConverter/requirements.txt \
       -r PDFtoXMLUsingExcel/requirements.txt
 
-# 8. Env + port
+# 8. Create writable directories with proper permissions
+RUN mkdir -p /usr/src/app/temp /usr/src/app/uploads /usr/src/app/outputs \
+    && chmod -R 777 /usr/src/app/temp /usr/src/app/uploads /usr/src/app/outputs
+
+# 9. Env + port
 ENV PORT=5000
 EXPOSE 5000
 
-# 8. Start backend
+# 10. Start backend
 CMD ["npm", "start"]

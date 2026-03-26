@@ -1,0 +1,24 @@
+# Force LF line endings for all text files (prevents CRLF issues on Windows)
+* text=auto eol=lf
+
+# Ensure these critical files are always LF (docker/shell break with CRLF)
+*.env text eol=lf
+*.sh text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.js text eol=lf
+*.py text eol=lf
+*.md text eol=lf
+Dockerfile text eol=lf
+docker-compose*.yaml text eol=lf
+
+# Binary files — don't touch
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary

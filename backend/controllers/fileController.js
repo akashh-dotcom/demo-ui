@@ -415,9 +415,13 @@ const processFileWithExternalApi = async (file, metadataFilePath = null) => {
       let outputFiles = [];
 
       if (externalService === 'pdf') {
-        // PDF API: List and download files
+        // PDF API: List and download files (skip source files - we already have the original)
         const filesResponse = await pdfApiService.listOutputFiles(job.job_id);
         for (const outputFile of filesResponse.files || []) {
+          if (outputFile.file_type === 'source') {
+            console.log(`Skipping source file: ${outputFile.name}`);
+            continue;
+          }
           const localPath = path.join(outputDir, outputFile.name);
           // Create subdirectories if needed (e.g., MultiMedia/image.png)
           const localDir = path.dirname(localPath);

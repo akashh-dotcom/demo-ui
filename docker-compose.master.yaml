@@ -1,5 +1,3 @@
-version: "3.9"
-
 # =============================================================================
 # Master Docker Compose - All Services
 # =============================================================================
@@ -49,6 +47,8 @@ services:
       dockerfile: Dockerfile
     container_name: ritt-backend
     restart: unless-stopped
+    env_file:
+      - ./backend/.env
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 5000
@@ -106,12 +106,11 @@ services:
       dockerfile: Dockerfile
     container_name: ritt-pdf-api
     restart: unless-stopped
+    env_file:
+      - ./backend/.env
     environment:
       PORT: 8000
       MONGODB_URI: ${MONGODB_URI:-mongodb://mongodb:27017/RittenhouseXMLConverter}
-      # AI API Keys - set these in your .env file
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       # PDF Editor configuration
       PDFTOXML_EDITOR_PORT_START: 5100
       # Webhook URL for notifying demo-ui when conversion completes
@@ -207,11 +206,11 @@ volumes:
 #    git clone https://github.com/YOUR_ORG/PDFtoXMLUsingExcel.git
 #    git clone https://github.com/YOUR_ORG/RittDocConverter.git
 #
-# 2. Create .env file in demo-ui/:
+# 2. Set up your API key in demo-ui/backend/.env:
 #
 #    cd demo-ui
-#    cp .env.example .env
-#    # Edit .env with your MongoDB URI and secrets
+#    # Edit backend/.env — set ANTHROPIC_API_KEY=sk-ant-xxxxx
+#    # All services read from backend/.env via env_file directive
 #
 # 3. Start all services:
 #
@@ -232,5 +231,18 @@ volumes:
 #
 #    Then start without the mongodb service:
 #    docker-compose -f docker-compose.master.yaml up backend frontend pdf-api epub-api epub-editor --build
+#
+# 6. Platform-specific notes:
+#
+#    macOS:   Install Docker Desktop. No extra config needed.
+#    Windows: Install Docker Desktop with WSL2 backend. Clone repos inside WSL2
+#             filesystem (not /mnt/c/) for best performance.
+#    Linux:   Install Docker Engine + Docker Compose plugin.
+#             Add your user to the docker group:
+#               sudo usermod -aG docker $USER
+#             Then log out and back in.
+#             If volume permissions fail, run:
+#               docker-compose -f docker-compose.master.yaml down -v
+#               docker-compose -f docker-compose.master.yaml up --build
 #
 # =============================================================================
