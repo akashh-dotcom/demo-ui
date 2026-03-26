@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { getAllUsers, getAllFiles } from '../../utils/api';
 import { useNotification } from '../../contexts/NotificationContext';
-import Navigation from '../../components/shared/Navigation';
 import Loading from '../../components/shared/Loading';
 import { AreaChart, Area, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -175,7 +174,6 @@ export const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#f0f4f8' }}>
-      <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">

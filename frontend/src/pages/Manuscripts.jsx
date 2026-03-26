@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import { useManuscripts } from '../hooks/useManuscripts';
 import { useDownload } from '../hooks/useDownload';
 import { useNotification } from '../contexts/NotificationContext';
-import Navigation from '../components/shared/Navigation';
 import Loading from '../components/shared/Loading';
 import FileUpload from '../components/shared/FileUpload';
 import ConfirmationDialog from '../components/shared/ConfirmationDialog';
@@ -320,7 +319,6 @@ export const Manuscripts = () => {
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
-      <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header - Responsive */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 gap-4">

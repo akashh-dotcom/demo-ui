@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getCurrentUser, changePassword } from '../utils/api';
 import { useNotification } from '../contexts/NotificationContext';
-import Navigation from '../components/shared/Navigation';
 import Loading from '../components/shared/Loading';
 
 export const Profile = () => {
@@ -133,8 +132,6 @@ export const Profile = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50">
-      <Navigation />
-      
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent mb-2">

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import Navigation from '../../components/shared/Navigation';
 import Loading from '../../components/shared/Loading';
 import ConfirmationDialog from '../../components/shared/ConfirmationDialog';
 import { useNotification } from '../../contexts/NotificationContext';
@@ -309,7 +308,6 @@ export const SystemSettings = () => {
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
-      <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">

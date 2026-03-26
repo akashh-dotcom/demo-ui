@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { getAllUsers, deleteUser as deleteUserApi, createUser, formatDate } from '../../utils/api';
 import { useNotification } from '../../contexts/NotificationContext';
-import Navigation from '../../components/shared/Navigation';
 import Loading from '../../components/shared/Loading';
 
 export const UserManagement = () => {
@@ -141,7 +140,6 @@ export const UserManagement = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navigation />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8 flex justify-between items-center">
           <div>

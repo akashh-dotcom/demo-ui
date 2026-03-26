@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useManuscripts } from '../hooks/useManuscripts';
 import { useNotification } from '../contexts/NotificationContext';
-import Navigation from '../components/shared/Navigation';
 import Loading from '../components/shared/Loading';
 
 export const Dashboard = () => {
@@ -134,7 +133,6 @@ export const Dashboard = () => {
 
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(to bottom right, #e8f0f8, #f5f9fc)' }}>
-      <Navigation />
       <div className="w-full max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
         {/* Header */}
         <div className="mb-6 sm:mb-8">

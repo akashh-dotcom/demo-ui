@@ -3,17 +3,30 @@ import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Notifications from './components/shared/Notifications';
+import PageLayout from './components/shared/PageLayout';
 
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Manuscripts from './pages/Manuscripts';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
+import CostAnalytics from './pages/CostAnalytics';
+import BatchOperations from './pages/BatchOperations';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import UserManagement from './pages/admin/UserManagement';
 import ActivityLogs from './pages/admin/ActivityLogs';
 import ConversionReports from './pages/admin/ConversionReports';
 import SystemSettings from './pages/admin/SystemSettings';
+
+function ProtectedPageLayout({ children, title, requireAdmin = false }) {
+  return (
+    <ProtectedRoute requireAdmin={requireAdmin}>
+      <PageLayout title={title}>
+        {children}
+      </PageLayout>
+    </ProtectedRoute>
+  );
+}
 
 function App() {
   return (
@@ -26,73 +39,89 @@ function App() {
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
+                <ProtectedPageLayout title="Dashboard">
                   <Dashboard />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
               }
             />
             <Route
               path="/manuscripts"
               element={
-                <ProtectedRoute>
+                <ProtectedPageLayout title="Manuscripts">
                   <Manuscripts />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
+              }
+            />
+            <Route
+              path="/cost-analytics"
+              element={
+                <ProtectedPageLayout title="Cost Analytics">
+                  <CostAnalytics />
+                </ProtectedPageLayout>
+              }
+            />
+            <Route
+              path="/batch-operations"
+              element={
+                <ProtectedPageLayout title="Batch Operations">
+                  <BatchOperations />
+                </ProtectedPageLayout>
               }
             />
             <Route
               path="/profile"
               element={
-                <ProtectedRoute>
+                <ProtectedPageLayout title="Profile">
                   <Profile />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
               }
             />
             <Route
               path="/settings"
               element={
-                <ProtectedRoute>
+                <ProtectedPageLayout title="Settings">
                   <Settings />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
               }
             />
             <Route
               path="/admin"
               element={
-                <ProtectedRoute requireAdmin={true}>
+                <ProtectedPageLayout title="Admin Dashboard" requireAdmin>
                   <AdminDashboard />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
               }
             />
             <Route
               path="/admin/users"
               element={
-                <ProtectedRoute requireAdmin={true}>
+                <ProtectedPageLayout title="User Management" requireAdmin>
                   <UserManagement />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
               }
             />
             <Route
               path="/admin/activities"
               element={
-                <ProtectedRoute requireAdmin={true}>
+                <ProtectedPageLayout title="Activity Logs" requireAdmin>
                   <ActivityLogs />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
               }
             />
             <Route
               path="/admin/reports"
               element={
-                <ProtectedRoute requireAdmin={true}>
+                <ProtectedPageLayout title="Conversion Reports" requireAdmin>
                   <ConversionReports />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
               }
             />
             <Route
               path="/admin/system"
               element={
-                <ProtectedRoute requireAdmin={true}>
+                <ProtectedPageLayout title="System Settings" requireAdmin>
                   <SystemSettings />
-                </ProtectedRoute>
+                </ProtectedPageLayout>
               }
             />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
