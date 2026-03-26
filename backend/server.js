@@ -4,8 +4,10 @@ const cors = require('cors');
 const path = require('path');
 const http = require('http');
 const { Server } = require('socket.io');
+const jwt = require('jsonwebtoken');
 const connectDB = require('./db/db');
 const multer = require('multer');
+const User = require('./models/User');
 
 // Load environment variables
 dotenv.config();
@@ -26,12 +28,45 @@ const io = new Server(server, {
 // Make io available globally for use in other modules
 global.io = io;
 
+// Socket.IO authentication middleware
+io.use(async (socket, next) => {
+  try {
+    const token = socket.handshake.auth?.token;
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return next(new Error('User not found'));
+    }
+
+    // Attach user info to socket for later use
+    socket.userId = user._id.toString();
+    socket.userRole = user.role;
+    next();
+  } catch (error) {
+    console.error('Socket auth failed:', error.message);
+    next(new Error('Invalid token'));
+  }
+});
+
 // Socket.IO connection handling
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
+  console.log('Client connected:', socket.id, '| User:', socket.userId);
+
+  // Join user-specific room
+  socket.join(`user:${socket.userId}`);
+
+  // Join admin room if user is admin
+  if (socket.userRole === 'admin' || socket.userRole === 'super_admin') {
+    socket.join('admin');
+    console.log(`User ${socket.userId} joined admin room`);
+  }
 
   socket.on('disconnect', () => {
-    console.log('Client disconnected:', socket.id);
+    console.log('Client disconnected:', socket.id, '| User:', socket.userId);
   });
 });
 

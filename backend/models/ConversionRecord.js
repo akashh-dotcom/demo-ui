@@ -123,6 +123,21 @@ const conversionRecordSchema = new mongoose.Schema({
     confidenceScore: Number
   },
 
+  // Cost tracking
+  cost: {
+    inputTokens: { type: Number, default: 0 },
+    outputTokens: { type: Number, default: 0 },
+    cacheReadTokens: { type: Number, default: 0 },
+    cacheCreateTokens: { type: Number, default: 0 },
+    totalCost: { type: Number, default: 0 },  // USD
+    model: { type: String, default: '' },
+    breakdown: [{
+      step: String,
+      tokens: Number,
+      cost: Number
+    }]
+  },
+
   // Additional metadata
   metadata: {
     type: mongoose.Schema.Types.Mixed,
@@ -299,7 +314,9 @@ conversionRecordSchema.statics.getDashboardStats = async function(filters = {}) 
         avgProcessingTime: { $avg: '$processingDurationSeconds' },
         totalProcessingTime: { $sum: '$processingDurationSeconds' },
         totalFileSize: { $sum: '$fileSize' },
-        avgFileSize: { $avg: '$fileSize' }
+        avgFileSize: { $avg: '$fileSize' },
+        totalCost: { $sum: '$cost.totalCost' },
+        avgCost: { $avg: '$cost.totalCost' }
       }
     }
   ]);
@@ -314,7 +331,9 @@ conversionRecordSchema.statics.getDashboardStats = async function(filters = {}) 
     avgProcessingTime: 0,
     totalProcessingTime: 0,
     totalFileSize: 0,
-    avgFileSize: 0
+    avgFileSize: 0,
+    totalCost: 0,
+    avgCost: 0
   };
 };
 
@@ -337,6 +356,135 @@ conversionRecordSchema.statics.getDailyStats = async function(days = 30) {
     },
     { $sort: { '_id.date': 1 } }
   ]);
+};
+
+// Static method to get cost analytics with filters
+conversionRecordSchema.statics.getCostAnalytics = async function(filters = {}) {
+  const matchStage = {};
+
+  if (filters.startDate) {
+    matchStage.createdAt = { $gte: new Date(filters.startDate) };
+  }
+  if (filters.endDate) {
+    matchStage.createdAt = {
+      ...matchStage.createdAt,
+      $lte: new Date(filters.endDate)
+    };
+  }
+  if (filters.fileType) {
+    matchStage.fileType = filters.fileType;
+  }
+  if (filters.publisher) {
+    matchStage.publisher = { $regex: filters.publisher, $options: 'i' };
+  }
+  if (filters.model) {
+    matchStage['cost.model'] = filters.model;
+  }
+
+  // Total cost
+  const [totalStats] = await this.aggregate([
+    { $match: matchStage },
+    {
+      $group: {
+        _id: null,
+        totalCost: { $sum: '$cost.totalCost' },
+        totalInputTokens: { $sum: '$cost.inputTokens' },
+        totalOutputTokens: { $sum: '$cost.outputTokens' },
+        totalCacheReadTokens: { $sum: '$cost.cacheReadTokens' },
+        totalCacheCreateTokens: { $sum: '$cost.cacheCreateTokens' },
+        avgCostPerRecord: { $avg: '$cost.totalCost' },
+        count: { $sum: 1 }
+      }
+    }
+  ]);
+
+  // Cost by model
+  const costByModel = await this.aggregate([
+    { $match: { ...matchStage, 'cost.model': { $ne: '' } } },
+    {
+      $group: {
+        _id: '$cost.model',
+        totalCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 },
+        avgCost: { $avg: '$cost.totalCost' }
+      }
+    },
+    { $sort: { totalCost: -1 } }
+  ]);
+
+  // Cost by publisher
+  const costByPublisher = await this.aggregate([
+    { $match: { ...matchStage, publisher: { $ne: null } } },
+    {
+      $group: {
+        _id: '$publisher',
+        totalCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 },
+        avgCost: { $avg: '$cost.totalCost' }
+      }
+    },
+    { $sort: { totalCost: -1 } }
+  ]);
+
+  // Cost by fileType
+  const costByFileType = await this.aggregate([
+    { $match: matchStage },
+    {
+      $group: {
+        _id: '$fileType',
+        totalCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 },
+        avgCost: { $avg: '$cost.totalCost' }
+      }
+    },
+    { $sort: { totalCost: -1 } }
+  ]);
+
+  // Daily cost breakdown
+  const dailyCost = await this.aggregate([
+    { $match: matchStage },
+    {
+      $group: {
+        _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+        totalCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { _id: 1 } }
+  ]);
+
+  // Weekly cost breakdown
+  const weeklyCost = await this.aggregate([
+    { $match: matchStage },
+    {
+      $group: {
+        _id: {
+          year: { $isoWeekYear: '$createdAt' },
+          week: { $isoWeek: '$createdAt' }
+        },
+        totalCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 }
+      }
+    },
+    { $sort: { '_id.year': 1, '_id.week': 1 } }
+  ]);
+
+  return {
+    total: totalStats || {
+      totalCost: 0,
+      totalInputTokens: 0,
+      totalOutputTokens: 0,
+      totalCacheReadTokens: 0,
+      totalCacheCreateTokens: 0,
+      avgCostPerRecord: 0,
+      count: 0
+    },
+    costByModel,
+    costByPublisher,
+    costByFileType,
+    dailyCost,
+    weeklyCost
+  };
 };
 
 module.exports = mongoose.model('ConversionRecord', conversionRecordSchema, 'conversion_dashboard');

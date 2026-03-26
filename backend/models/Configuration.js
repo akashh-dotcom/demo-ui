@@ -172,6 +172,34 @@ const configurationSchema = new mongoose.Schema({
     default: true
   },
 
+  // Cost rates per model (cost per million tokens)
+  costRates: {
+    type: Map,
+    of: {
+      inputCostPerMillion: Number,
+      outputCostPerMillion: Number,
+      cacheReadCostPerMillion: Number,
+    },
+    default: new Map([
+      ['claude-sonnet-4-20250514', { inputCostPerMillion: 3.0, outputCostPerMillion: 15.0, cacheReadCostPerMillion: 0.3 }],
+      ['claude-opus-4-20250514', { inputCostPerMillion: 15.0, outputCostPerMillion: 75.0, cacheReadCostPerMillion: 1.5 }],
+    ])
+  },
+
+  // Email templates
+  emailTemplates: {
+    success: { type: String, default: '' },
+    failure: { type: String, default: '' },
+    batchComplete: { type: String, default: '' },
+  },
+
+  // Path configuration
+  pathConfig: {
+    defaultOutputPath: { type: String, default: '' },
+    defaultUploadPath: { type: String, default: '' },
+    tempDirectory: { type: String, default: '' },
+  },
+
   // Audit Info
   lastUpdatedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -237,6 +265,15 @@ configurationSchema.statics.updateConfig = async function(updates, userId) {
   }
   if (typeof updates.useExternalApis === 'boolean') {
     config.useExternalApis = updates.useExternalApis;
+  }
+  if (updates.costRates) {
+    config.costRates = new Map(Object.entries(updates.costRates));
+  }
+  if (updates.emailTemplates) {
+    Object.assign(config.emailTemplates, updates.emailTemplates);
+  }
+  if (updates.pathConfig) {
+    Object.assign(config.pathConfig, updates.pathConfig);
   }
 
   config.lastUpdatedBy = userId;

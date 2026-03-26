@@ -26,6 +26,16 @@ const {
 // Feature flag: use external APIs (set to true to enable)
 const USE_EXTERNAL_APIS = process.env.USE_EXTERNAL_APIS === 'true';
 
+/**
+ * Emit a Socket.IO event to a specific user's room.
+ * Safely no-ops if global.io is not available.
+ */
+function emitToUser(userId, event, data) {
+  if (global.io && userId) {
+    global.io.to(`user:${userId.toString()}`).emit(event, data);
+  }
+}
+
 // Docker internal URLs for API services (used when running in containers)
 const PDF_API_INTERNAL_URL = process.env.PDFTOXML_API_URL || 'http://pdf-api:8000';
 const EPUB_API_INTERNAL_URL = process.env.EPUB_API_URL || 'http://epub-api:5001';
@@ -162,6 +172,11 @@ const processFileAsync = async (file) => {
 
     // Update status to processing
     await file.updateStatus('processing');
+    emitToUser(file.uploadedBy, 'conversion:started', {
+      fileId: file._id,
+      fileName: file.originalName,
+      status: 'processing',
+    });
 
     // Create temporary directory for this file's processing
     const tempDir = path.join(__dirname, '../temp', file._id.toString());
@@ -175,6 +190,13 @@ const processFileAsync = async (file) => {
     await downloadToLocal(file.gridfsInputFileId, tempInputPath);
     console.log(`Input file downloaded successfully`);
 
+    emitToUser(file.uploadedBy, 'conversion:progress', {
+      fileId: file._id,
+      progress: 20,
+      status: 'processing',
+      step: 'Extracting',
+    });
+
     // Create output directory for this file
     outputDir = path.join(tempDir, 'output');
 
@@ -183,6 +205,13 @@ const processFileAsync = async (file) => {
 
     // Execute converter (automatically detects PDF or EPUB)
     const result = await executeConverter(tempInputPath, outputDir);
+
+    emitToUser(file.uploadedBy, 'conversion:progress', {
+      fileId: file._id,
+      progress: 60,
+      status: 'processing',
+      step: 'Packaging',
+    });
 
     // Upload output files to GridFS
     console.log(`Uploading ${result.outputFiles.length} output files to GridFS...`);
@@ -216,6 +245,11 @@ const processFileAsync = async (file) => {
     });
 
     console.log(`File ${file._id} processed successfully and uploaded to GridFS`);
+    emitToUser(file.uploadedBy, 'conversion:completed', {
+      fileId: file._id,
+      fileName: file.originalName,
+      outputFiles: outputFilesWithGridFS,
+    });
 
     // Send success email notification
     try {
@@ -267,6 +301,11 @@ const processFileAsync = async (file) => {
         const errorMessage = error.message || error.error || 'Conversion failed';
         await file.updateStatus('failed', {
           errorMessage: errorMessage
+        });
+        emitToUser(file.uploadedBy, 'conversion:failed', {
+          fileId: file._id,
+          fileName: file.originalName,
+          error: errorMessage,
         });
 
         // Send failure email notification
@@ -380,6 +419,11 @@ const processFileWithExternalApi = async (file, metadataFilePath = null) => {
 
     // Update status to processing
     await file.updateStatus('processing');
+    emitToUser(file.uploadedBy, 'conversion:started', {
+      fileId: file._id,
+      fileName: file.originalName,
+      status: 'processing',
+    });
 
     // Record conversion start in tracking database
     try {
@@ -397,6 +441,12 @@ const processFileWithExternalApi = async (file, metadataFilePath = null) => {
       apiService.ACTIONABLE_STATUSES || apiService.TERMINAL_STATUSES,
       (statusUpdate) => {
         console.log(`Job ${job.job_id} status: ${statusUpdate.status} (${statusUpdate.progress || 0}%)`);
+        emitToUser(file.uploadedBy, 'conversion:progress', {
+          fileId: file._id,
+          progress: statusUpdate.progress || 0,
+          status: statusUpdate.status,
+          step: statusUpdate.status === 'completed' ? 'Complete' : 'Converting',
+        });
       }
     );
 
@@ -521,6 +571,11 @@ const processFileWithExternalApi = async (file, metadataFilePath = null) => {
       });
 
       console.log(`File ${file._id} processed successfully via ${externalService} API`);
+      emitToUser(file.uploadedBy, 'conversion:completed', {
+        fileId: file._id,
+        fileName: file.originalName,
+        outputFiles: outputFilesWithGridFS,
+      });
 
       // Record completion in tracking database
       try {
@@ -581,6 +636,11 @@ const processFileWithExternalApi = async (file, metadataFilePath = null) => {
         const errorMessage = error.message || 'External conversion failed';
         await file.updateStatus('failed', {
           errorMessage: errorMessage
+        });
+        emitToUser(file.uploadedBy, 'conversion:failed', {
+          fileId: file._id,
+          fileName: file.originalName,
+          error: errorMessage,
         });
 
         // Record failure in tracking database
@@ -882,19 +942,75 @@ const finalizeFile = async (req, res) => {
   }
 };
 
-// @desc    Get all files for current user
+// @desc    Get all files for current user with advanced filtering
 // @route   GET /api/files
 // @access  Private
 const getUserFiles = async (req, res) => {
   try {
-    const files = await File.find({ uploadedBy: req.user._id })
-      .sort({ createdAt: -1 })
+    const {
+      fileType,
+      publisher,
+      startDate,
+      endDate,
+      minSize,
+      maxSize,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+      page = 1,
+      limit = 20
+    } = req.query;
+
+    // Build filter query
+    const query = { uploadedBy: req.user._id };
+
+    if (fileType) {
+      query.fileType = fileType.toLowerCase();
+    }
+    if (publisher) {
+      query['conversionMetadata.publisher'] = { $regex: publisher, $options: 'i' };
+    }
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+    if (minSize || maxSize) {
+      query.fileSize = {};
+      if (minSize) query.fileSize.$gte = parseInt(minSize);
+      if (maxSize) query.fileSize.$lte = parseInt(maxSize);
+    }
+    if (search) {
+      query.$or = [
+        { originalName: { $regex: search, $options: 'i' } },
+        { 'conversionMetadata.isbn': { $regex: search, $options: 'i' } },
+        { 'conversionMetadata.title': { $regex: search, $options: 'i' } },
+        { 'conversionMetadata.author': { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const pageNum = Math.max(1, parseInt(page));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit)));
+    const skip = (pageNum - 1) * limitNum;
+
+    const total = await File.countDocuments(query);
+    const totalPages = Math.ceil(total / limitNum);
+
+    const files = await File.find(query)
+      .sort({ [sortBy]: sortOrder === 'asc' ? 1 : -1 })
+      .skip(skip)
+      .limit(limitNum)
       .populate('uploadedBy', 'username email');
 
     res.status(200).json({
       success: true,
-      count: files.length,
-      data: { files }
+      data: {
+        files,
+        total,
+        page: pageNum,
+        totalPages,
+        limit: limitNum
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -1082,7 +1198,11 @@ const deleteFile = async (req, res) => {
       await cleanupDirectory(file.outputPath);
     }
 
+    const deletedFileId = file._id;
+    const deletedFileUserId = file.uploadedBy;
     await file.deleteOne();
+
+    emitToUser(deletedFileUserId, 'file:deleted', { fileId: deletedFileId });
 
     res.status(200).json({
       success: true,
@@ -1522,12 +1642,39 @@ const webhookComplete = async (req, res) => {
 
       // Record completion in tracking database
       try {
-        await ConversionRecord.recordComplete(file._id, outputFilesWithGridFS, {
+        const completionMeta = {
           isbn: isbn,
           title: metadata?.title,
           author: metadata?.author,
           publisher: metadata?.publisher
-        });
+        };
+        await ConversionRecord.recordComplete(file._id, outputFilesWithGridFS, completionMeta);
+
+        // Extract cost data from webhook payload if available
+        if (metadata?.cost || metadata?.costTracker) {
+          const costData = metadata.cost || metadata.costTracker || {};
+          const costUpdate = {
+            'cost.inputTokens': costData.inputTokens || costData.input_tokens || 0,
+            'cost.outputTokens': costData.outputTokens || costData.output_tokens || 0,
+            'cost.cacheReadTokens': costData.cacheReadTokens || costData.cache_read_tokens || 0,
+            'cost.cacheCreateTokens': costData.cacheCreateTokens || costData.cache_create_tokens || 0,
+            'cost.totalCost': costData.totalCost || costData.total_cost || 0,
+            'cost.model': costData.model || '',
+          };
+          if (costData.breakdown && Array.isArray(costData.breakdown)) {
+            costUpdate['cost.breakdown'] = costData.breakdown.map(b => ({
+              step: b.step || b.name || '',
+              tokens: b.tokens || 0,
+              cost: b.cost || 0
+            }));
+          }
+          await ConversionRecord.findOneAndUpdate(
+            { fileId: file._id },
+            { $set: costUpdate },
+            { sort: { createdAt: -1 } }
+          );
+          console.log('Cost data stored for file:', file._id);
+        }
       } catch (trackingError) {
         console.error('Failed to record completion:', trackingError);
       }
@@ -1583,6 +1730,121 @@ const webhookComplete = async (req, res) => {
   }
 };
 
+// @desc    Get cost analytics
+// @route   GET /api/files/cost-analytics
+// @access  Private/Admin
+const getCostAnalytics = async (req, res) => {
+  try {
+    const { startDate, endDate, fileType, publisher, model } = req.query;
+
+    const filters = {};
+    if (startDate) filters.startDate = startDate;
+    if (endDate) filters.endDate = endDate;
+    if (fileType) filters.fileType = fileType;
+    if (publisher) filters.publisher = publisher;
+    if (model) filters.model = model;
+
+    const analytics = await ConversionRecord.getCostAnalytics(filters);
+
+    res.status(200).json({
+      success: true,
+      data: analytics
+    });
+  } catch (error) {
+    console.error('Error fetching cost analytics:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching cost analytics',
+      error: error.message
+    });
+  }
+};
+
+// @desc    Get cost summary
+// @route   GET /api/files/cost-summary
+// @access  Private/Admin
+const getCostSummary = async (req, res) => {
+  try {
+    // Total cost
+    const [totalResult] = await ConversionRecord.aggregate([
+      { $group: {
+        _id: null,
+        totalCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 }
+      }}
+    ]);
+
+    // This month cost
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const [monthResult] = await ConversionRecord.aggregate([
+      { $match: { createdAt: { $gte: startOfMonth } } },
+      { $group: {
+        _id: null,
+        thisMonthCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 }
+      }}
+    ]);
+
+    // Most expensive and cheapest books
+    const mostExpensive = await ConversionRecord.findOne({ 'cost.totalCost': { $gt: 0 } })
+      .sort({ 'cost.totalCost': -1 })
+      .select('fileName title isbn cost.totalCost')
+      .lean();
+
+    const cheapest = await ConversionRecord.findOne({ 'cost.totalCost': { $gt: 0 } })
+      .sort({ 'cost.totalCost': 1 })
+      .select('fileName title isbn cost.totalCost')
+      .lean();
+
+    // Cost by model
+    const costByModel = await ConversionRecord.aggregate([
+      { $match: { 'cost.model': { $ne: '' } } },
+      { $group: {
+        _id: '$cost.model',
+        totalCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 }
+      }},
+      { $sort: { totalCost: -1 } }
+    ]);
+
+    // Cost by publisher
+    const costByPublisher = await ConversionRecord.aggregate([
+      { $match: { publisher: { $ne: null } } },
+      { $group: {
+        _id: '$publisher',
+        totalCost: { $sum: '$cost.totalCost' },
+        count: { $sum: 1 }
+      }},
+      { $sort: { totalCost: -1 } }
+    ]);
+
+    const totalCost = totalResult?.totalCost || 0;
+    const totalCount = totalResult?.count || 0;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        totalCost,
+        thisMonthCost: monthResult?.thisMonthCost || 0,
+        avgCostPerBook: totalCount > 0 ? totalCost / totalCount : 0,
+        mostExpensiveBook: mostExpensive || null,
+        cheapestBook: cheapest || null,
+        costByModel,
+        costByPublisher
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching cost summary:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching cost summary',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   uploadFile,
   getUserFiles,
@@ -1593,6 +1855,8 @@ module.exports = {
   getConversionDashboardFiles,
   getConversionRecords,
   getConversionStats,
+  getCostAnalytics,
+  getCostSummary,
   // External API endpoints
   launchEditor,
   finalizeFile,

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
+import { SocketProvider } from './contexts/SocketContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Notifications from './components/shared/Notifications';
 import PageLayout from './components/shared/PageLayout';
@@ -33,6 +34,7 @@ function App() {
     <BrowserRouter>
       <NotificationProvider>
         <AuthProvider>
+          <SocketProvider>
           <Notifications />
           <Routes>
             <Route path="/login" element={<Login />} />
@@ -127,6 +129,7 @@ function App() {
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>
+          </SocketProvider>
         </AuthProvider>
       </NotificationProvider>
     </BrowserRouter>

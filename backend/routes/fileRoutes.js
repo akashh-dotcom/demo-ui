@@ -10,6 +10,8 @@ const {
   getConversionDashboardFiles,
   getConversionRecords,
   getConversionStats,
+  getCostAnalytics,
+  getCostSummary,
   launchEditor,
   finalizeFile,
   webhookComplete
@@ -41,6 +43,12 @@ router.get('/conversion-records', authorizeAdmin, getConversionRecords);
 
 // Get conversion statistics (Admin only)
 router.get('/conversion-stats', authorizeAdmin, getConversionStats);
+
+// Cost analytics (Admin only)
+router.get('/cost-analytics', authorizeAdmin, getCostAnalytics);
+
+// Cost summary (Admin only)
+router.get('/cost-summary', authorizeAdmin, getCostSummary);
 
 // Get all files (Admin only)
 router.get('/all', authorizeAdmin, getAllFiles);

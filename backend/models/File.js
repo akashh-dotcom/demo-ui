@@ -110,6 +110,10 @@ const fileSchema = new mongoose.Schema({
   errorMessage: {
     type: String
   },
+  batchId: {
+    type: String,
+    index: true
+  },
   conversionMetadata: {
     conversionType: String,
     outputFormats: [String],

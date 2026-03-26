@@ -595,4 +595,42 @@ router.get('/admin/options', isAdmin, async (req, res) => {
   }
 });
 
+/**
+ * @route   PUT /api/config/admin/email-templates
+ * @desc    Update email templates in configuration
+ * @access  Private (Admin only)
+ */
+router.put('/admin/email-templates', isAdmin, async (req, res) => {
+  try {
+    const { success: successTemplate, failure: failureTemplate, batchComplete } = req.body;
+
+    const config = await Configuration.getConfig();
+
+    if (typeof successTemplate === 'string') {
+      config.emailTemplates.success = successTemplate;
+    }
+    if (typeof failureTemplate === 'string') {
+      config.emailTemplates.failure = failureTemplate;
+    }
+    if (typeof batchComplete === 'string') {
+      config.emailTemplates.batchComplete = batchComplete;
+    }
+
+    config.lastUpdatedBy = req.user._id;
+    await config.save();
+
+    res.json({
+      success: true,
+      message: 'Email templates updated successfully',
+      data: config.emailTemplates
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Error updating email templates',
+      error: error.message
+    });
+  }
+});
+
 module.exports = router;
